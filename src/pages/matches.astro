@@ -1,0 +1,8 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Matches from '../islands/Matches';
+---
+
+<BaseLayout title="Results · Monday Night Football" description="Every Monday night result on record, with season filters.">
+  <Matches client:load />
+</BaseLayout>

@@ -1,0 +1,7 @@
+{
+  "_comment": "Public Firebase web-app identifiers (NOT secrets). Written by `npm run setup:firebase`. Security comes from firestore.rules, not from hiding these.",
+  "apiKey": "AIzaSyBghJ-2gGi_zFg-9odjNtsGFIqAUrnG8mo",
+  "authDomain": "tccfootball.firebaseapp.com",
+  "projectId": "tccfootball",
+  "appId": "1:495407655486:web:dfaedf6917035b805a7f6f"
+}

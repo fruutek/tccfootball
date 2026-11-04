@@ -54,7 +54,7 @@ export function renderOutcome(o: Outcome & { dataRevision?: number }, target: st
   }
 
   const facts = d['facts'] as { statements: string[]; notRecorded: string[]; records: string[] } | null | undefined;
-  if (facts && plan.ok) {
+  if (facts && plan.ok && !o.applied) {
     out.push('FACT SHEET — write the report using ONLY these facts (plus anything the user told you):');
     for (const s of facts.statements) out.push(`  • ${s}`);
     out.push('  Not recorded (do not state as fact):');

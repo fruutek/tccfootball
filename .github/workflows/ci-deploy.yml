@@ -1,0 +1,134 @@
+name: Verify and deploy
+
+# Every push and pull request is verified. Only pushes to `main` deploy.
+#
+# Publishing a RESULT never needs this workflow: results live in Firestore and appear on the
+# site without a deploy. This workflow ships CODE changes (design, features) and static assets
+# such as player photos.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Type-check, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The Firestore emulator (rules + integration tests) needs a recent JDK.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+
+      - name: Type-check (Astro + tooling)
+        run: npm run check
+
+      - name: Unit tests (statistics, validation, duplicates, edits, own goals, …)
+        run: npm test
+
+      - name: Firestore rules + store + rendering tests (emulator)
+        run: npm run test:rules
+
+      - name: Install browser for the end-to-end test
+        run: npx playwright-core install --with-deps chromium
+
+      - name: End-to-end test (publish → Firestore → live site, in a real browser)
+        run: npm run test:e2e
+
+      - name: Build the production site
+        run: npm run build
+
+      - name: Production bundle must not contain the schema library or admin code
+        run: |
+          if grep -rlE "ZodError|firebase-admin" dist/_astro; then
+            echo "A server-side library leaked into the browser bundle" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: test-results/screenshots
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: dist
+          retention-days: 3
+
+  deploy:
+    name: Deploy to Firebase Hosting
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: read
+      id-token: write # lets this job prove who it is to Google (keyless — no stored passwords or keys)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Builds against the committed public config in src/config/firebase.public.json.
+      - run: npm run build
+
+      # Keyless sign-in to Google: GitHub vouches for this exact workflow on `main`, and Google exchanges
+      # that for a short-lived token for a service account that can deploy Hosting and nothing else.
+      # If that trust link has not been created yet this step fails harmlessly and the deploy is skipped.
+      - name: Sign in to Google (keyless)
+        id: auth
+        continue-on-error: true
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/495407655486/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: mnf-hosting-deployer@tccfootball.iam.gserviceaccount.com
+
+      - name: Automatic deploy is not set up yet
+        if: steps.auth.outcome != 'success'
+        run: |
+          echo "::warning title=Deploy skipped::Keyless Google access is not configured for this repository yet, so the site was not deployed from CI. Tests passed."
+
+      - name: Deploy Hosting
+        if: steps.auth.outcome == 'success'
+        run: npx firebase deploy --only hosting --project tccfootball --non-interactive
+
+      - name: Smoke-test the live site
+        if: steps.auth.outcome == 'success'
+        run: |
+          set -e
+          base=https://tccfootball.web.app
+          curl -fsS "$base/" | grep -q "Monday Night Football"
+          # The shells behind the Hosting rewrites must answer for ids that do not exist as files.
+          for p in /matches/2026-01-05 /players/anyone /news/any-article /leaderboards /matches; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$base$p")
+            echo "$p -> $code"
+            [ "$code" = "200" ]
+          done

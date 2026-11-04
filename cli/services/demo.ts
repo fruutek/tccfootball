@@ -85,36 +85,71 @@ export function nextMondayOnOrAfter(today: string): string {
 
 const list = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
-/** Writes a report using only numbers from the fact sheet. */
-function reportFromFacts(f: MatchFacts, flavour: { headline: string; opener: string }) {
-  const scorers = f.scorers.map((s) => `${s.player}${s.goals > 1 ? ` (${s.goals})` : ''}`);
-  const paragraphs: string[] = [flavour.opener];
-  const winner = f.result.winnerName;
-  paragraphs.push(
-    winner
-      ? `${winner} won ${f.result.line.replace(/–/g, '-')}. ${scorers.length ? `The goals came from ${list(scorers)}.` : ''}`
-      : `Honours were even: ${f.result.line.replace(/–/g, '-')}. ${scorers.length ? `${list(scorers)} got the goals.` : ''}`,
-  );
-  const extras: string[] = [];
-  for (const u of f.unknownScorerGoals) extras.push(`${u.count === 1 ? 'One' : u.count} of ${u.team}'s goals went down as scorer-unknown.`);
-  for (const o of f.ownGoals) extras.push(`${o.player ?? 'An own goal'} found the wrong net, with the goal counting for ${o.creditedTo}.`);
-  if (f.linkedAssists.length) extras.push(`Assists: ${list(f.linkedAssists)}.`);
-  else if (f.assists.length) extras.push(`${list(f.assists.map((a) => `${a.player}${a.assists > 1 ? ` (${a.assists})` : ''}`))} provided the assists.`);
-  if (extras.length) paragraphs.push(extras.join(' '));
-  const notes = f.players.flatMap((p) => [
-    ...(p.debut ? [`${p.name} made a first appearance.`] : []),
-    ...(p.hatTrick ? [`${p.name} scored a hat-trick.`] : []),
-    ...p.milestones.map((m) => `${p.name} reached a milestone: ${m}.`),
-  ]);
-  if (notes.length) paragraphs.push(`## Worth noting\n\n${notes.join(' ')}`);
-  if (f.playerOfTheMatch) paragraphs.push(`${f.playerOfTheMatch} took the player of the match award.`);
+/** Guards the hand-written prose below: if the data changes, the build fails instead of the report lying. */
+function expect(cond: boolean, what: string): void {
+  if (!cond) throw new Error(`Demo report no longer matches the demo data: ${what}`);
+}
+const player = (f: MatchFacts, name: string) => {
+  const p = f.players.find((x) => x.name === name);
+  expect(Boolean(p), `${name} did not play`);
+  return p!;
+};
+
+type Report = { title: string; standfirst: string; body: string };
+const FICTIONAL = '*Demo data — this match report is fictional.*';
+
+/** Latest match: goals with minutes and a linked assist. */
+function reportLatest(f: MatchFacts): Report {
+  expect(f.result.line === 'Red Team 3–0 Blue Team', 'latest score');
+  expect(f.scorers.some((s) => s.player === 'Marco Rinaldi' && s.minutes.join() === '12,31'), "Marco's goals at 12' and 31'");
+  expect(f.scorers.some((s) => s.player === 'Leo Hartmann' && s.minutes.join() === '47'), "Leo's goal at 47'");
+  expect(f.linkedAssists.some((a) => a.includes('Danny Okafor') && a.includes("12'")), "Danny's assist at 12'");
+  const marco = player(f, 'Marco Rinaldi');
+  const milestones = marco.milestones.length ? ` The brace took Marco to his ${marco.careerGoals} goals in ${marco.careerAppearances} appearances${marco.milestones.length ? ` — ${list(marco.milestones.map((m) => `his ${m}`))} among them` : ''}.` : '';
   const lead = f.standings.topScorersSeason[0];
-  if (lead) paragraphs.push(`${lead.player} leads the ${f.season} scoring chart on ${lead.goals}.`);
-  paragraphs.push('*Demo data — this match report is fictional.*');
   return {
-    title: flavour.headline,
-    standfirst: `${f.result.line.replace(/–/g, '-')}${f.playerOfTheMatch ? `, with ${f.playerOfTheMatch} named player of the match` : ''}. Fictional demo match.`,
-    body: paragraphs.join('\n\n'),
+    title: 'Marco double keeps Red Team in front',
+    standfirst: 'Red Team beat Blue Team 3-0 on Monday night, with Marco Rinaldi scoring twice and Leo Hartmann adding a third.',
+    body: [
+      'Marco Rinaldi set the tone early as Red Team won again on Monday night, beating Blue Team 3-0.',
+      `Marco opened the scoring on 12 minutes, set up by Danny Okafor, and doubled the lead on 31. Leo Hartmann made it three on 47, and Blue Team never found a way back into the game.${milestones}`,
+      `## The numbers\n\nMarco Rinaldi was named player of the match. ${lead ? `He leads the ${f.season} scoring chart on ${lead.goals}.` : ''}`,
+      FICTIONAL,
+    ].join('\n\n'),
+  };
+}
+
+/** Hat-trick match: Bibs 5-1 Skins. */
+function reportHatTrick(f: MatchFacts): Report {
+  expect(f.result.line === 'Bibs 5–1 Skins', 'hat-trick score');
+  expect(player(f, 'Danny Okafor').hatTrick, 'Danny scored a hat-trick');
+  expect(f.assists.some((a) => a.player === 'Luca Ferreira' && a.assists === 2), 'Luca had two assists');
+  return {
+    title: 'Danny hat-trick as Bibs run riot',
+    standfirst: 'Bibs 5-1 Skins, with Danny Okafor scoring three and taking the player of the match award.',
+    body: [
+      'It was one-way traffic on Monday night as the Bibs put five past the Skins.',
+      'Danny Okafor scored a hat-trick, with Kofi Mensah and Sami Haddad adding the others. Luca Ferreira supplied two assists and Ben Calloway another. Marco Rinaldi scored the Skins\' only goal.',
+      'Danny was named player of the match.',
+      FICTIONAL,
+    ].join('\n\n'),
+  };
+}
+
+/** Debut match: Red Team 3-1 Blue Team. */
+function reportDebut(f: MatchFacts): Report {
+  expect(f.result.line === 'Red Team 3–1 Blue Team', 'debut score');
+  const y = player(f, 'Yusuf Demir');
+  expect(y.debut && y.goals === 2, 'Yusuf debuted with two goals');
+  return {
+    title: 'Yusuf announces himself with a debut brace',
+    standfirst: 'Red Team 3-1 Blue Team, and a first appearance to remember for Yusuf Demir.',
+    body: [
+      'A new name entered the books on Monday night, and it did not take long for it to make an impression.',
+      'Yusuf Demir made his first appearance and scored twice for Red Team, who beat Blue Team 3-1. Marco Rinaldi got the other goal; Eddie Marsh scored for Blue Team. Danny Okafor provided two assists.',
+      'Yusuf was named player of the match.',
+      FICTIONAL,
+    ].join('\n\n'),
   };
 }
 
@@ -149,11 +184,7 @@ export async function seedDemo(store: Store, ctx: Ctx): Promise<SeedResult> {
 
   /* matches --------------------------------------------------------------- */
   const latest = lastMondayBefore(ctx.today);
-  const flavour: Record<number, { headline: string; opener: string }> = {
-    2: { headline: 'Danny hat-trick as Bibs run riot', opener: 'It was one-way traffic on Monday night as the Bibs put five past the Skins.' },
-    6: { headline: 'Yusuf announces himself with a debut brace', opener: 'A new name entered the books on Monday night, and it did not take long for it to make an impression.' },
-    9: { headline: 'Marco double keeps Red Team in front', opener: "Marco Rinaldi set the tone early as Red Team won again on Monday night." },
-  };
+  const reports: Record<number, (f: MatchFacts) => Report> = { 2: reportHatTrick, 6: reportDebut, 9: reportLatest };
   for (let i = 0; i < WEEKS.length; i++) {
     const w = WEEKS[i]!;
     const date = addDays(latest, -7 * (WEEKS.length - 1 - i));
@@ -169,10 +200,10 @@ export async function seedDemo(store: Store, ctx: Ctx): Promise<SeedResult> {
       instruction: 'demo seed',
     };
     let spec: Record<string, unknown> = base;
-    const f = flavour[i];
-    if (f) {
+    const writeReport = reports[i];
+    if (writeReport) {
       const dry = await must(planPublishMatch(await store.load(), base, ctx), `match ${date}`);
-      spec = { ...base, report: reportFromFacts(dry.details.facts!, f) };
+      spec = { ...base, report: writeReport(dry.details.facts!) };
     }
     const plan = await must(planPublishMatch(await store.load(), spec, ctx), `match ${date}`);
     const bad = plan.warnings.filter((x) => x.code.startsWith('REPORT_'));

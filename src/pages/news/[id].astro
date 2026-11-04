@@ -1,0 +1,14 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Article from '../../islands/Article';
+
+// One static shell. Firebase Hosting rewrites /news/** to this page, and the
+// island reads the id from the address bar and loads the data from Firestore.
+export function getStaticPaths() {
+  return [{ params: { id: '_' } }];
+}
+---
+
+<BaseLayout title="News · Monday Night Football">
+  <Article client:load />
+</BaseLayout>

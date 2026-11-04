@@ -1,5 +1,5 @@
-import type { Match, MatchEvent, TeamKey } from './schema';
-import { TEAM_KEYS } from './schema';
+import { TEAM_KEYS, type TeamKey } from './constants';
+import type { Match, MatchEvent } from './schema';
 
 /** The parts of a match that describe what happened on the pitch. */
 export type MatchContent = Pick<Match, 'date' | 'teams' | 'score' | 'events' | 'playerOfTheMatch'>;

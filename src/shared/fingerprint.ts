@@ -1,5 +1,5 @@
 import type { MatchContent } from './events';
-import { TEAM_KEYS } from './schema';
+import { TEAM_KEYS } from './constants';
 
 /**
  * A canonical string describing WHAT HAPPENED in a match, ignoring cosmetics.

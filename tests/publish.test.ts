@@ -350,7 +350,7 @@ describe('editing historical results', () => {
 });
 
 describe('unpublishing, republishing and deleting', () => {
-  it('removes an unpublished match from all statistics and brings it back on republish', async () => {
+  it('removes an unpublished match from all statistics and brings it — and its report — back on republish', async () => {
     await publish({ ...example(), report: { title: 'Red win', standfirst: 'x', body: 'y' } });
     const unpub = planMatchStatus(await store.load(), '2026-11-02', 'unpublish', ctx);
     expect(unpub.ops).toHaveLength(2); // match + its report
@@ -360,10 +360,23 @@ describe('unpublishing, republishing and deleting', () => {
     expect(snap.articles[0]!.status).toBe('unpublished');
 
     const repub = planMatchStatus(snap, '2026-11-02', 'republish', ctx);
-    expect(repub.warnings.map((w) => w.code)).toContain('REPORT_STILL_UNPUBLISHED');
+    expect(repub.ops).toHaveLength(2);
+    expect(repub.warnings.map((w) => w.code)).not.toContain('REPORT_STILL_UNPUBLISHED');
     await execute(store, repub, ctx, true);
     snap = await store.load();
     expect(statsFor(computeStats(snap.matches), 'peter').goals).toBe(2);
+    expect(snap.articles[0]!.status).toBe('published');
+  });
+
+  it('does not resurrect a report that was unpublished separately', async () => {
+    await publish({ ...example(), report: { title: 'Red win', standfirst: 'x', body: 'y' } });
+    const slug = (await store.load()).articles[0]!.id;
+    await execute(store, planArticleStatus(await store.load(), slug, 'unpublish', ctx), ctx, true);
+    const later = { ...ctx, now: new Date('2026-11-04T11:00:00Z') };
+    await execute(store, planMatchStatus(await store.load(), '2026-11-02', 'unpublish', later), later, true);
+    const repub = planMatchStatus(await store.load(), '2026-11-02', 'republish', { ...ctx, now: new Date('2026-11-04T12:00:00Z') });
+    expect(repub.ops).toHaveLength(1); // the match only
+    expect(repub.warnings.map((w) => w.code)).toContain('REPORT_STILL_UNPUBLISHED');
   });
 
   it('deletes a match with its report, and revert brings both back', async () => {

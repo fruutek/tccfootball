@@ -1,0 +1,8 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Players from '../islands/Players';
+---
+
+<BaseLayout title="Players · Monday Night Football" description="Every player, with career statistics and recent form.">
+  <Players client:load />
+</BaseLayout>

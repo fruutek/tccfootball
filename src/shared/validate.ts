@@ -7,7 +7,7 @@
  */
 import { isMonday, isValidDate } from './dates';
 import { accountGoals, type MatchContent } from './events';
-import { TEAM_KEYS, otherTeam, type TeamKey } from './schema';
+import { TEAM_KEYS, otherTeam, type TeamKey } from './constants';
 
 export interface Issue {
   level: 'error' | 'warning';
