@@ -1,0 +1,111 @@
+name: Verify and deploy
+
+# Every push and pull request is verified. Only pushes to `main` deploy.
+#
+# Publishing a RESULT never needs this workflow: results live in Firestore and appear on the
+# site without a deploy. This workflow ships CODE changes (design, features) and static assets
+# such as player photos.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Type-check, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The Firestore emulator (rules + integration tests) needs a recent JDK.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+
+      - name: Type-check (Astro + tooling)
+        run: npm run check
+
+      - name: Unit tests (statistics, validation, duplicates, edits, own goals, …)
+        run: npm test
+
+      - name: Firestore rules + store + rendering tests (emulator)
+        run: npm run test:rules
+
+      - name: Install browser for the end-to-end test
+        run: npx playwright-core install --with-deps chromium
+
+      - name: End-to-end test (publish → Firestore → live site, in a real browser)
+        run: npm run test:e2e
+
+      - name: Build the production site
+        run: npm run build
+
+      - name: Production bundle must not contain the schema library or admin code
+        run: |
+          if grep -rlE "ZodError|firebase-admin" dist/_astro; then
+            echo "A server-side library leaked into the browser bundle" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: test-results/screenshots
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: dist
+          retention-days: 3
+
+  deploy:
+    name: Deploy to Firebase Hosting
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Builds against the committed public config in src/config/firebase.public.json.
+      - run: npm run build
+
+      # Hosting only. The key in FIREBASE_SERVICE_ACCOUNT can deploy the site and nothing else
+      # (see docs/SETUP.md) — it cannot read or write Firestore data or change security rules.
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.FIREBASE_PROJECT_ID }}
+          channelId: live

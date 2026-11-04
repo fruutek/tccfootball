@@ -11,12 +11,13 @@
  * WHILE THE SITE STAYS EXACTLY AS BUILT — no redeploy — and watch the page change.
  */
 import { createHash } from 'node:crypto';
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { chromium, type Browser, type Page } from 'playwright-core';
 
 const SITE = process.env['E2E_BASE_URL'] ?? 'http://127.0.0.1:5000';
-const SHOTS = 'docs/screenshots';
+// Screenshots go to a git-ignored folder; a curated set is committed in docs/screenshots.
+const SHOTS = process.env['E2E_SCREENSHOTS'] ?? 'test-results/screenshots';
 const failures: string[] = [];
 let checks = 0;
 
@@ -55,6 +56,7 @@ async function noHorizontalScroll(page: Page, label: string) {
 }
 
 async function main() {
+  mkdirSync(SHOTS, { recursive: true });
   if (!existsSync('dist/index.html')) throw new Error('Run `npm run build:emulator` first.');
   const executablePath = process.env['CHROME_BIN'] && existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : process.env['CHROME_BIN'];
   const browser: Browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}), args: ['--no-sandbox'] });
