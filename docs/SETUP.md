@@ -9,6 +9,21 @@ the manual steps below. Budget about 20 minutes. Everything fits on the free **S
 > build environment because it has no Google credentials. If a step errors, the message names what is missing — typically a role —
 > and the fix is a one-line change. Start with the "Verify" checks at each stage.
 
+## Status of this installation (project `tccfootball`)
+
+| | |
+|---|---|
+| Firebase project | `tccfootball` (Spark plan, no billing) — created by the owner |
+| Firestore | `(default)` database, Native mode, **eur3** (EU multi-region), free-tier eligible — created by the owner |
+| Security rules | **Deployed and verified** against the live database (anonymous read of published data allowed; every write, the audit log and unfiltered lists refused) |
+| Website | **Live:** https://tccfootball.web.app — deployed to Hosting site `tccfootball` |
+| Web config | `src/config/firebase.public.json` holds the project's public web identifiers |
+| Code | Merged to `main` through a pull request whose CI (types, unit, emulator, browser end-to-end, bundle guard) passed |
+| Automatic deploys from GitHub | **Pending** — needs the keyless trust link in §5–6 below; until then the deploy job skips with a notice |
+| Publishing credentials | **Pending** — see §5 |
+
+Everything below is the general procedure; steps already done are marked above.
+
 ## 0. Prerequisites
 
 * A Google account · Node 22 (`node -v`) · `git` · the [`gcloud` CLI](https://cloud.google.com/sdk/docs/install) · the [`gh` CLI](https://cli.github.com) (optional, for secrets)
