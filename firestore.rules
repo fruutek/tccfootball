@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// Monday Night Football — Firestore security rules.
+//
+// Principle: the public website may READ published content and may never WRITE.
+// All writes come from the publishing CLI through the Admin SDK with a
+// least-privilege service account, which bypasses these rules by design. There
+// is no client-side authentication, so no signed-in user (or anyone else)
+// gains any extra right here.
+//
+//   players          public read      · no client writes
+//   matches          public read, but ONLY documents with status == 'published'
+//   articles         public read, but ONLY documents with status == 'published'
+//   settings/site    public read of that one document (get only) · no client writes
+//   auditLog         completely private (contains before/after snapshots)
+//   everything else  denied
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /players/{playerId} {
+      allow get, list: if true;
+      allow create, update, delete: if false;
+    }
+
+    // Queries must include where('status', '==', 'published') — rules are not filters.
+    match /matches/{matchId} {
+      allow get, list: if resource.data.status == 'published';
+      allow create, update, delete: if false;
+    }
+
+    match /articles/{articleId} {
+      allow get, list: if resource.data.status == 'published';
+      allow create, update, delete: if false;
+    }
+
+    match /settings/site {
+      allow get: if true;
+      allow list, create, update, delete: if false;
+    }
+
+    match /auditLog/{entryId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

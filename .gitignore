@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.astro/
+.firebase/
+*.log
+.env
+.env.*
+!.env.example
+
+# Credentials must never be committed.
+*service-account*.json
+*serviceAccount*.json
+*-adminsdk-*.json
+firebase-key*.json
+credentials.json
+.mnf-tmp/
+.DS_Store
+coverage/
+test-results/

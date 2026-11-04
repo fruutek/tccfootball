@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["cli/**/*", "scripts/**/*", "tests/**/*", "src/shared/**/*", "vitest*.ts", "astro.config.mjs"],
+  "compilerOptions": { "noEmit": true, "allowJs": true, "checkJs": false }
+}
