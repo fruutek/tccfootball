@@ -66,7 +66,7 @@ There are two ways to run any `mnf` command. **Everywhere these docs and skills 
    * `apply` — `"false"` for a dry run, `"true"` to write
 
    Then read the result: `actions_list` (`list_workflow_runs`, `resource_id: publish.yml`) for the newest run → wait until `status` is `completed`
-   (a run takes about a minute) → `get_job_logs` with `run_id`, `return_content: true`. The CLI's normal report is in the log, ending with
+   (a run takes about a minute) → `actions_list` (`list_workflow_jobs`, `resource_id: <run id>`) for the job id → `get_job_logs` with that `job_id`, `return_content: true` and **`tail_lines: 80`** (about 16 lines of runner clean-up follow the CLI report, so a short tail shows only noise). The CLI's normal report is in the log, ending with
    `MNF_RESULT exit=<code> mode=<apply|dry-run>`. **Exit 0 = fine; 2 = it needs input or refused (ask the owner); anything else = a problem to report.**
 
    Rules for this route:

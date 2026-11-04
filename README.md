@@ -77,7 +77,7 @@ PUBLIC_FIREBASE_PROJECT_ID=demo-mnf PUBLIC_FIREBASE_API_KEY=x PUBLIC_FIRESTORE_E
 
 ## Going live
 
-**Live site: https://tccfootball.web.app** (Firebase project `tccfootball`).
+**Live site: https://tccfootball.web.app** (Firebase project `tccfootball`, free Spark plan). Deploys and publishing are keyless GitHub Actions workflows — see `docs/SETUP.md` §5.
 
 Everything above runs on emulators. Creating the real Firebase project and granting credentials needs your Google account:
 **[`docs/SETUP.md`](docs/SETUP.md)** is the exact, ~20 minute checklist. Merge to `main` and GitHub Actions deploys to `https://<project-id>.web.app`.

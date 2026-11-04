@@ -19,8 +19,9 @@ the manual steps below. Budget about 20 minutes. Everything fits on the free **S
 | Website | **Live:** https://tccfootball.web.app — deployed to Hosting site `tccfootball` |
 | Web config | `src/config/firebase.public.json` holds the project's public web identifiers |
 | Code | Merged to `main` through a pull request whose CI (types, unit, emulator, browser end-to-end, bundle guard) passed |
-| Automatic deploys from GitHub | **Pending** — needs the keyless trust link in §5–6 below; until then the deploy job skips with a notice |
-| Publishing credentials | **Pending** — see §5 |
+| Automatic deploys from GitHub | **Live and keyless.** Every merge to `main` is tested, deployed and smoke-tested against the live URL; no secret is stored anywhere (§5) |
+| Publishing | **Live and keyless.** Claude publishes through the `Publish` workflow; verified end to end on production (publish → live site → duplicate refused → audit → removal) (§5) |
+| Default branch | Still the original branch name (the repo was empty when first pushed). **Cosmetic:** change it to `main` in GitHub → Settings → Branches. Nothing depends on it |
 
 Everything below is the general procedure; steps already done are marked above.
 
@@ -70,84 +71,54 @@ Verify in the Firebase console → Firestore → Rules that the deployed text ma
 `npm run test:rules` (51 allow/deny cases, mutation-checked). Re-run `npm run deploy:rules` whenever `firestore.rules` changes —
 CI deliberately does **not** hold a credential that can change rules.
 
-## 5. Publisher credentials — how Claude is allowed to write
+## 5. Keyless access for GitHub — publishing and deploys (configured)
 
-Writes use the Firebase **Admin SDK**, which bypasses security rules, so the credential is the real gate. Give it the least
-privilege that works: a dedicated service account that can read/write Firestore and **nothing else**.
+No passwords or keys exist for this project. GitHub Actions proves to Google *who it is* (an OIDC token that names the repository, branch and workflow), and
+Google hands that exact workflow a short-lived token for one restricted service account.
 
-```bash
-PROJECT=tcc-monday-night-football
-gcloud iam service-accounts create mnf-publisher --project $PROJECT \
-  --display-name "MNF publisher (Firestore read/write only)"
-gcloud projects add-iam-policy-binding $PROJECT \
-  --member "serviceAccount:mnf-publisher@$PROJECT.iam.gserviceaccount.com" \
-  --role roles/datastore.user
-```
+| Service account | Can do | Cannot do | Usable only by |
+|---|---|---|---|
+| `mnf-hosting-deployer` | Update the website files on Firebase Hosting (`roles/firebasehosting.admin`, `roles/serviceusage.serviceUsageConsumer`) | Read or write Firestore data, change rules or permissions | workflow `ci-deploy.yml` running on `main` |
+| `mnf-publisher` | Read and write Firestore documents (`roles/datastore.user`) | Deploy, change rules or permissions, touch any other service | workflow `publish.yml` running on `main` |
 
-`roles/datastore.user` ("Cloud Datastore User") covers Firestore documents. It cannot deploy hosting, change rules or IAM, or
-touch other services. Then choose **one** way to hand it to the CLI:
+Trust link: workload identity pool `github-actions` / provider `github`, with the condition
+`assertion.repository == 'fruutek/tccfootball' && assertion.ref == 'refs/heads/main'` — pull requests, forks and other branches get nothing.
+Neither account has a downloadable key (verified by listing user-managed keys: zero).
 
-**A. Key stored as a secret in Claude's environment (best for Claude Code on the web / remote sessions).**
+**How publishing flows:** you message Claude → Claude starts the `Publish` workflow with the request (dry run) → reads the log → starts it again with *apply* ticked →
+the CLI writes to Firestore → the site shows it on the next page load. See `docs/PUBLISHING.md`.
 
-```bash
-gcloud iam service-accounts keys create mnf-publisher.json \
-  --iam-account mnf-publisher@$PROJECT.iam.gserviceaccount.com
-```
-
-Paste the file's contents (or its `base64` form) into the session's environment secret **`MNF_SERVICE_ACCOUNT_JSON`**, then delete the
-local file (`rm mnf-publisher.json`). The CLI reads it from the environment only; `.gitignore` blocks key-shaped files and
-`CLAUDE.md` forbids printing it. If the key is ever exposed: Google Cloud console → IAM → Service accounts → Keys → delete, create a new one.
-(If your organisation blocks key creation, use B.)
-
-**B. No key file at all (best on your own computer).** Impersonate the account with your own login:
+**Inspect:** Google Cloud console → IAM & Admin → *Workload Identity Federation*, and → *Service accounts*.
+**Revoke instantly:** delete the provider `github` (or either service account) in those pages — publishing/deploys stop at once. Nothing else is affected.
+**Recreate** (equivalent `gcloud` commands, for reference; the live setup was made through Google's API and verified by reading it back):
 
 ```bash
-gcloud iam service-accounts add-iam-policy-binding mnf-publisher@$PROJECT.iam.gserviceaccount.com \
-  --member "user:YOU@gmail.com" --role roles/iam.serviceAccountTokenCreator
-gcloud auth application-default login \
-  --impersonate-service-account=mnf-publisher@$PROJECT.iam.gserviceaccount.com
-```
-
-The CLI picks up Application Default Credentials automatically. Nothing long-lived is stored.
-
-**C. Your own account** (`gcloud auth application-default login`) works too, but carries *your* full permissions. Fine on your laptop for
-a hobby project; not recommended for a cloud agent.
-
-**Verify:**
-
-```bash
-npm run mnf -- status       # must say  Target: PRODUCTION project tcc-monday-night-football
-```
-
-If it reports `PERMISSION_DENIED`, the account is missing `roles/datastore.user` on that project. If it reports it could not find
-credentials, the environment variable / login from this step is not visible to the shell running Claude.
-
-## 6. GitHub → Firebase Hosting (automatic deploys)
-
-The repository is `fruutek/tccfootball`. The workflow `.github/workflows/ci-deploy.yml` verifies every push and, on `main`, builds and
-deploys to Hosting. It needs a **Hosting-only** credential and the project id:
-
-```bash
-gcloud iam service-accounts create mnf-hosting-deployer --project $PROJECT --display-name "MNF Hosting deploy (CI)"
-for ROLE in roles/firebasehosting.admin roles/serviceusage.apiKeysViewer; do
-  gcloud projects add-iam-policy-binding $PROJECT \
-    --member "serviceAccount:mnf-hosting-deployer@$PROJECT.iam.gserviceaccount.com" --role $ROLE
+P=tccfootball; N=495407655486; R=fruutek/tccfootball
+gcloud iam service-accounts create mnf-hosting-deployer --project $P
+gcloud iam service-accounts create mnf-publisher --project $P
+gcloud projects add-iam-policy-binding $P --member serviceAccount:mnf-hosting-deployer@$P.iam.gserviceaccount.com --role roles/firebasehosting.admin
+gcloud projects add-iam-policy-binding $P --member serviceAccount:mnf-hosting-deployer@$P.iam.gserviceaccount.com --role roles/serviceusage.serviceUsageConsumer
+gcloud projects add-iam-policy-binding $P --member serviceAccount:mnf-publisher@$P.iam.gserviceaccount.com --role roles/datastore.user
+gcloud iam workload-identity-pools create github-actions --project $P --location global
+gcloud iam workload-identity-pools providers create-oidc github --project $P --location global --workload-identity-pool github-actions \
+  --issuer-uri https://token.actions.githubusercontent.com \
+  --attribute-mapping google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref,attribute.workflow_ref=assertion.workflow_ref \
+  --attribute-condition "assertion.repository=='$R' && assertion.ref=='refs/heads/main'"
+for pair in mnf-hosting-deployer:ci-deploy.yml mnf-publisher:publish.yml; do
+  gcloud iam service-accounts add-iam-policy-binding ${pair%%:*}@$P.iam.gserviceaccount.com --project $P --role roles/iam.workloadIdentityUser \
+    --member "principalSet://iam.googleapis.com/projects/$N/locations/global/workloadIdentityPools/github-actions/attribute.workflow_ref/$R/.github/workflows/${pair##*:}@refs/heads/main"
 done
-gcloud iam service-accounts keys create deployer.json \
-  --iam-account mnf-hosting-deployer@$PROJECT.iam.gserviceaccount.com
-
-gh secret   set FIREBASE_SERVICE_ACCOUNT --repo fruutek/tccfootball < deployer.json
-gh variable set FIREBASE_PROJECT_ID      --repo fruutek/tccfootball --body $PROJECT
-rm deployer.json
 ```
 
-(Alternative: `npx firebase init hosting:github` creates a similar account and secret interactively — if you use it, decline overwriting
-the workflow and rename the secret it created, or edit the workflow's secret name.) These are the roles documented for
-`FirebaseExtended/action-hosting-deploy`; if the first run fails with a permissions error it names the role to add.
+*Alternative for a laptop:* the CLI also accepts `MNF_SERVICE_ACCOUNT_JSON` or `gcloud auth application-default login --impersonate-service-account=mnf-publisher@…`
+and then runs directly — but nothing requires it.
 
-Then merge the work to `main` (this build is on branch `claude/monday-night-football-site-i2oa6j`). The first run creates the
-`production` GitHub environment; you can add required reviewers to it if you want a manual gate. After it succeeds the site is live at
-`https://tcc-monday-night-football.web.app` (or your project id). One-time, if Hosting says there is no site: `npx firebase hosting:sites:create <project-id>`.
+## 6. Automatic deploys (configured)
+
+`.github/workflows/ci-deploy.yml`: on every push and pull request it type-checks and runs the unit, emulator and real-browser end-to-end tests and checks the bundle.
+On a push to `main` it then builds, signs in keylessly as `mnf-hosting-deployer`, runs `firebase deploy --only hosting`, and **smoke-tests the live URL**
+(home page, the rewrite shells, the main pages). A failing test blocks the deploy. Security rules are deliberately *not* auto-deployed: run `npm run deploy:rules`
+yourself (or ask Claude, signed in) when `firestore.rules` changes.
 
 ## 7. Before launch: remove the demo data
 

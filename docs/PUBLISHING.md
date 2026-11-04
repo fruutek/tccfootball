@@ -3,6 +3,20 @@
 How results, players and articles get onto the site. Day to day you never run these yourself — you message Claude Code and it follows
 [`CLAUDE.md`](../CLAUDE.md) and the playbooks in [`.claude/skills/`](../.claude/skills). This page is the reference for what is happening underneath.
 
+## How a request reaches the database
+
+A Claude session has **no database credentials** by design. Instead it starts the **`Publish` GitHub workflow** (Actions → Publish), which runs one `mnf`
+command as the restricted `mnf-publisher` account — keyless, usable only by that workflow on `main`. Typical timings: about a minute per run.
+
+1. Dry run — `command: "match publish"`, `request: { …JSON… }`, `apply: false` → Claude reads the log (names resolved, stat changes, fact sheet, warnings).
+2. Apply — the identical inputs with `apply: true` → the log ends `MNF_RESULT exit=0 mode=apply` and gives the undo id.
+
+`exit=2` means the CLI needs an answer or refused (ambiguous name, missing scorer, duplicate…) — Claude asks you. The workflow rejects anything that is not an allow-listed
+`mnf` command, never uses a shell, and refuses `--apply/--file/--project` inside the command text (`scripts/run-mnf.ts`, tested).
+
+> **This repository is public, so workflow logs are public.** Only publish what is meant for the website. Claude keeps the audit-log note to a neutral one-liner
+> instead of your verbatim chat.
+
 ## The model
 
 ```
