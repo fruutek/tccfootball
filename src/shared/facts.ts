@@ -10,7 +10,7 @@ import { accountGoals, outcomeOf } from './events';
 import { buildLeaderboard, LEADERBOARDS, type LeaderboardKey } from './leaderboards';
 import type { Match, MatchEvent, Player, TeamKey } from './schema';
 import { seasonIdOf, seasonLabel } from './seasons';
-import { compareMatches, computeStats, matchesForPeriod, statsFor, type PlayerStats } from './stats';
+import { compareMatches, computeStats, matchesForPeriod, startingTotalsOf, statsFor, type PlayerStats } from './stats';
 
 export interface FactOptions {
   seasonStartMonth?: number;
@@ -91,8 +91,10 @@ export function buildMatchFacts(
   const upTo = published.filter((m) => compareMatches(m, match) <= 0);
   const before = published.filter((m) => compareMatches(m, match) < 0);
 
-  const careerNow = computeStats(upTo);
-  const careerBefore = computeStats(before);
+  // Career figures are the all-time ones the site shows, so they include any pre-tracking starting totals.
+  const startingTotals = startingTotalsOf(players);
+  const careerNow = computeStats(upTo, { startingTotals });
+  const careerBefore = computeStats(before, { startingTotals });
   const seasonNow = computeStats(upTo, { period: { kind: 'season', id: season }, seasonStartMonth: startMonth });
 
   const { a, b } = match.teams;

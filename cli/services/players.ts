@@ -6,12 +6,18 @@ import type { Snapshot } from '../store';
 import type { Ctx, Plan } from '../types';
 import { err, newPlan, op, seal, warn } from './common';
 
+const startingTotalsSchema = z
+  .object({ goals: z.number().int().min(0).max(999).optional(), assists: z.number().int().min(0).max(999).optional() })
+  .strict();
+
 export const playerAddSchema = z
   .object({
     name: z.string().trim().min(1).max(40),
     nickname: z.string().trim().min(1).max(30).optional(),
     aliases: z.array(z.string().trim().min(1).max(40)).max(10).optional(),
     bio: z.string().trim().min(1).max(600).optional(),
+    /** Goals/assists from before match records began. Only for numbers the owner actually stated. */
+    startingTotals: startingTotalsSchema.optional(),
     fictional: z.boolean().optional(),
     instruction: z.string().max(4000).optional(),
   })
@@ -24,6 +30,7 @@ export const playerPatchSchema = z
     addAliases: z.array(z.string().trim().min(1).max(40)).optional(),
     removeAliases: z.array(z.string().trim().min(1).max(40)).optional(),
     bio: z.string().trim().min(1).max(600).nullable().optional(),
+    startingTotals: startingTotalsSchema.nullable().optional(),
     photo: z.string().nullable().optional(),
     status: z.enum(['active', 'archived']).optional(),
     instruction: z.string().max(4000).optional(),
@@ -35,6 +42,15 @@ export interface PlayerDetails {
   playerId: string | null;
   player: Player | null;
   changes: string[];
+}
+
+/** Drops zeros; undefined when nothing is left. */
+function cleanTotals(t: { goals?: number | undefined; assists?: number | undefined } | null | undefined) {
+  if (!t) return undefined;
+  const out: { goals?: number; assists?: number } = {};
+  if (t.goals) out.goals = t.goals;
+  if (t.assists) out.assists = t.assists;
+  return Object.keys(out).length ? out : undefined;
 }
 
 const firstToken = (s: string) => normaliseName(s).split(' ')[0] ?? '';
@@ -83,6 +99,7 @@ export function planAddPlayer(snap: Snapshot, input: unknown, ctx: Ctx): Plan<Pl
     ...(spec.nickname ? { nickname: spec.nickname } : {}),
     aliases: spec.aliases ?? [],
     ...(spec.bio ? { bio: spec.bio } : {}),
+    ...(cleanTotals(spec.startingTotals) ? { startingTotals: cleanTotals(spec.startingTotals)! } : {}),
     status: 'active',
     ...(spec.fictional ? { fictional: true as const } : {}),
     revision: 1,
@@ -169,6 +186,14 @@ export function planUpdatePlayer(snap: Snapshot, ref: string, input: unknown, ct
       changes.push('bio updated');
     }
   }
+  if (patch.startingTotals !== undefined) {
+    const next_ = cleanTotals(patch.startingTotals);
+    if (JSON.stringify(next_ ?? null) !== JSON.stringify(cur.startingTotals ?? null)) {
+      if (next_) next.startingTotals = next_;
+      else delete next.startingTotals;
+      changes.push(next_ ? `starting totals (before match records) → ${[next_.goals ? `${next_.goals} goals` : '', next_.assists ? `${next_.assists} assists` : ''].filter(Boolean).join(', ')}` : 'starting totals removed');
+    }
+  }
   if (patch.photo !== undefined) {
     if (patch.photo === null) {
       delete next.photo;
@@ -206,5 +231,52 @@ export function planUpdatePlayer(snap: Snapshot, ref: string, input: unknown, ct
   plan.details = { playerId: cur.id, player: check.data, changes };
   plan.ops.push(op('players', cur.id, 'update', cur, check.data, `Updated ${cur.displayName}: ${changes.join('; ')}`));
   plan.summary = `Update ${cur.displayName}: ${changes.join('; ')}`;
+  return seal(plan);
+}
+
+/* ------------------------------------------------------------------ several players at once */
+
+const addManySchema = z
+  .object({
+    players: z.array(playerAddSchema.omit({ instruction: true })).min(1).max(60),
+    instruction: z.string().max(4000).optional(),
+  })
+  .strict();
+
+export interface AddManyDetails {
+  created: { id: string; name: string; startingTotals?: { goals?: number; assists?: number } }[];
+}
+
+/** Creates a whole roster in ONE atomic plan; any problem with any name means nothing is written. */
+export function planAddPlayers(snap: Snapshot, input: unknown, ctx: Ctx): Plan<AddManyDetails> {
+  const plan = newPlan<AddManyDetails>('player add-many', { created: [] });
+  const parsed = addManySchema.safeParse(input);
+  if (!parsed.success) {
+    plan.errors.push(...parsed.error.issues.map((i) => err('SPEC_INVALID', `${i.path.join('.') || '(root)'}: ${i.message}`)));
+    return seal(plan);
+  }
+  if (parsed.data.instruction) plan.instruction = parsed.data.instruction;
+
+  let running: Snapshot = snap;
+  const seenWarnings = new Set<string>();
+  for (const spec of parsed.data.players) {
+    const one = planAddPlayer(running, spec, ctx);
+    for (const e of one.errors) plan.errors.push({ ...e, message: `${spec.name}: ${e.message}` });
+    for (const w of one.warnings) {
+      if (!seenWarnings.has(w.message)) {
+        seenWarnings.add(w.message);
+        plan.warnings.push(w);
+      }
+    }
+    if (one.ok) {
+      const doc = one.ops[0]!;
+      plan.ops.push(doc);
+      const player = doc.after as unknown as Player;
+      plan.details.created.push({ id: player.id, name: player.displayName, ...(player.startingTotals ? { startingTotals: player.startingTotals } : {}) });
+      running = { ...running, players: [...running.players, player] };
+    }
+  }
+  const withTotals = plan.details.created.filter((c) => c.startingTotals).length;
+  plan.summary = `Create ${plan.details.created.length} players${withTotals ? ` (${withTotals} with starting totals)` : ''}`;
   return seal(plan);
 }

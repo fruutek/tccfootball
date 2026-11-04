@@ -10,7 +10,7 @@
  * numbers are still right.
  */
 import { matchLines, outcomeOf } from './events';
-import type { Match, TeamKey } from './schema';
+import type { Match, Player, TeamKey } from './schema';
 import { inPeriod, type Period } from './seasons';
 
 export type Result = 'W' | 'D' | 'L';
@@ -33,8 +33,12 @@ export interface PlayerMatchEntry {
 export interface PlayerStats {
   playerId: string;
   appearances: number;
+  /** All-time goals INCLUDE `startingGoals`. Per-game rates use recorded matches only. */
   goals: number;
   assists: number;
+  /** Goals / assists carried over from before match records began (all-time view only). */
+  startingGoals: number;
+  startingAssists: number;
   ownGoals: number;
   goalContributions: number;
   wins: number;
@@ -56,10 +60,24 @@ export interface PlayerStats {
   history: PlayerMatchEntry[];
 }
 
+export interface StartingTotals {
+  goals?: number | undefined;
+  assists?: number | undefined;
+}
+
 export interface StatsOptions {
   period?: Period;
   seasonStartMonth?: number;
   formLength?: number;
+  /** Pre-tracking totals per player. Applied ONLY to the all-time view: their dates are unknown. */
+  startingTotals?: ReadonlyMap<string, StartingTotals>;
+}
+
+/** Collects every player's starting totals, ready for `computeStats`. */
+export function startingTotalsOf(players: readonly Pick<Player, 'id' | 'startingTotals'>[]): Map<string, StartingTotals> {
+  const map = new Map<string, StartingTotals>();
+  for (const p of players) if (p.startingTotals) map.set(p.id, p.startingTotals);
+  return map;
 }
 
 /** Chronological order: by date, then by id (so "-2" follows the first game that day). */
@@ -84,6 +102,8 @@ export function emptyStats(playerId: string): PlayerStats {
     appearances: 0,
     goals: 0,
     assists: 0,
+    startingGoals: 0,
+    startingAssists: 0,
     ownGoals: 0,
     goalContributions: 0,
     wins: 0,
@@ -163,6 +183,24 @@ export function computeStats(matches: readonly Match[], opts: StatsOptions = {})
     s.history = [...chronological].reverse();
     s.form = s.history.slice(0, formLength).map((e) => e.result);
     out.set(playerId, s);
+  }
+
+  // Starting totals join the ALL-TIME view only. They are added after the per-game rates above were
+  // computed, so goals-per-game keeps meaning "goals in recorded matches ÷ recorded appearances".
+  const allTime = (opts.period?.kind ?? 'all') === 'all';
+  if (allTime && opts.startingTotals) {
+    for (const [playerId, st] of opts.startingTotals) {
+      const g = st.goals ?? 0;
+      const a = st.assists ?? 0;
+      if (g === 0 && a === 0) continue;
+      const s = out.get(playerId) ?? emptyStats(playerId);
+      s.startingGoals = g;
+      s.startingAssists = a;
+      s.goals += g;
+      s.assists += a;
+      s.goalContributions = s.goals + s.assists;
+      out.set(playerId, s);
+    }
   }
   return out;
 }

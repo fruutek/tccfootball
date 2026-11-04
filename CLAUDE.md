@@ -102,7 +102,11 @@ There are two ways to run any `mnf` command. **Everywhere these docs and skills 
 9. **Don't use `--force`** on revert unless the owner explicitly says to.
 10. **Secrets.** Never print, commit or ask for service-account keys. Credentials come from the environment
     (`docs/SETUP.md`). Never read `.env*` or `*service-account*.json`. `src/config/firebase.public.json` is public by design.
-11. Keep `fictional` data out of real data: don't `demo seed` on a project with real matches (the CLI refuses).
+11. **Starting totals** (`startingTotals`) are the only statistics that are ever typed in. Use them *only* for goals/assists the owner states
+    from before match records began ("Peter has 3 goals"), via `player add-many` / `player add --starting-goals N` / `player update --starting-goals N`.
+    Never use them to record a match, never invent them, and tell the owner they count in all-time totals only. If the owner later records the
+    matches behind them, clear the starting totals so nothing is double-counted.
+12. Keep `fictional` data out of real data: don't `demo seed` on a project with real matches (the CLI refuses).
 
 ## Turning English into a spec
 

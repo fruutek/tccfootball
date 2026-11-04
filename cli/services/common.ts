@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { MatchContent } from '../../src/shared/events';
 import { participantIds } from '../../src/shared/events';
 import { canonicalContent } from '../../src/shared/fingerprint';
-import { computeStats, statsFor } from '../../src/shared/stats';
+import { computeStats, startingTotalsOf, statsFor } from '../../src/shared/stats';
 import type { Match, Player, SiteSettings } from '../../src/shared/schema';
 import type { Issue } from '../../src/shared/validate';
 import type { Clarification, Ctx, Doc, Plan, PlannedOp } from '../types';
@@ -94,8 +94,9 @@ export function statChanges(
   after: readonly Match[],
   players: readonly Player[],
 ): StatChange[] {
-  const b = computeStats(before);
-  const a = computeStats(after);
+  const startingTotals = startingTotalsOf(players);
+  const b = computeStats(before, { startingTotals });
+  const a = computeStats(after, { startingTotals });
   const ids = new Set([...b.keys(), ...a.keys()]);
   const nameOf = nameLookup(players);
   const out: StatChange[] = [];

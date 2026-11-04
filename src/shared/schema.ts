@@ -47,6 +47,18 @@ export const playerSchema = z
     /** Public path of an optimised static photo, e.g. "/photos/peter.3fa9c1.webp". */
     photo: z.string().regex(/^\/photos\/[a-z0-9._-]+\.(webp|jpg|png)$/).optional(),
     bio: optionalText(600),
+    /**
+     * Totals from BEFORE match records began (the one deliberate exception to "everything is derived
+     * from matches"). Counted in all-time totals only, never in per-game rates, and always shown as
+     * such. Remove them if the matches behind them are ever recorded, or they would be counted twice.
+     */
+    startingTotals: z
+      .object({
+        goals: z.number().int().min(0).max(999).optional(),
+        assists: z.number().int().min(0).max(999).optional(),
+      })
+      .strict()
+      .optional(),
     status: z.enum(['active', 'archived']),
     fictional: z.literal(true).optional(),
     revision: z.number().int().min(1),

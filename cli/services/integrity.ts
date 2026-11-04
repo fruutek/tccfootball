@@ -44,6 +44,13 @@ export function auditData(snap: Snapshot, ctx: Ctx): IntegrityReport {
   }
   for (const [f, names] of firsts) if (names.length > 1) notes.push(`"${f}" is the first name of ${names.join(', ')} — plain "${f}" is ambiguous when publishing results.`);
 
+  const withStarting = snap.players.filter((p) => p.startingTotals);
+  if (withStarting.length) {
+    const g = withStarting.reduce((n, p) => n + (p.startingTotals?.goals ?? 0), 0);
+    const a = withStarting.reduce((n, p) => n + (p.startingTotals?.assists ?? 0), 0);
+    notes.push(`${withStarting.length} player(s) carry starting totals from before match records began (${g} goals, ${a} assists). They count in all-time totals only. If those matches are ever recorded, clear the starting totals to avoid counting them twice.`);
+  }
+
   /* matches */
   const fps = new Map<string, string>();
   for (const m of snap.matches) {
