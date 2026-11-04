@@ -1,0 +1,8 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import News from '../islands/News';
+---
+
+<BaseLayout title="News · Monday Night Football" description="Match reports, player spotlights, weekly roundups and records.">
+  <News client:load />
+</BaseLayout>

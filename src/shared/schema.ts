@@ -9,24 +9,18 @@
  * they sort lexicographically, survive JSON caching and never shift time zone.
  */
 import { z } from 'zod';
+import {
+  ARTICLE_CATEGORIES,
+  NAMED_COLOURS,
+  SCHEMA_VERSION,
+  TEAM_KEYS,
+} from './constants';
 import { isValidDate } from './dates';
 import { ID_RE } from './ids';
 
-export const SCHEMA_VERSION = 1;
-
-export const TEAM_KEYS = ['a', 'b'] as const;
-export type TeamKey = (typeof TEAM_KEYS)[number];
-export const otherTeam = (k: TeamKey): TeamKey => (k === 'a' ? 'b' : 'a');
-
-export const COLLECTIONS = {
-  players: 'players',
-  matches: 'matches',
-  articles: 'articles',
-  settings: 'settings',
-  audit: 'auditLog',
-} as const;
-
-export const SITE_SETTINGS_ID = 'site';
+// Runtime constants live in ./constants (zod-free, safe for the browser bundle).
+// They are re-exported here for the CLI's convenience.
+export * from './constants';
 
 const id = z.string().min(1).max(80).regex(ID_RE, 'must be a lowercase-hyphenated id');
 const isoDate = z.string().refine(isValidDate, 'must be a real date, YYYY-MM-DD');
@@ -36,9 +30,6 @@ const optionalText = (max: number) => z.string().trim().min(1).max(max).optional
 const minute = z.number().int().min(0).max(130);
 
 /** A named team colour, or any 6-digit hex value. */
-export const NAMED_COLOURS = [
-  'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'teal', 'white', 'black', 'grey',
-] as const;
 export const colour = z
   .string()
   .regex(new RegExp(`^(${NAMED_COLOURS.join('|')}|#[0-9a-fA-F]{6})$`), 'use a named colour or #rrggbb');
@@ -136,23 +127,6 @@ export const matchSchema = z
 export type Match = z.infer<typeof matchSchema>;
 
 /* ---------------------------------------------------------------- articles */
-
-export const ARTICLE_CATEGORIES = [
-  'match-report',
-  'spotlight',
-  'roundup',
-  'humour',
-  'records',
-] as const;
-export type ArticleCategory = (typeof ARTICLE_CATEGORIES)[number];
-
-export const CATEGORY_LABELS: Record<ArticleCategory, string> = {
-  'match-report': 'Match report',
-  spotlight: 'Player spotlight',
-  roundup: 'Weekly roundup',
-  humour: 'Humour',
-  records: 'Records & milestones',
-};
 
 export const articleSchema = z
   .object({

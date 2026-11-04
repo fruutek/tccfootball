@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Statistics, results and news for our Monday night football group. Astro + Firestore + Firebase Hosting.",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
@@ -12,11 +14,12 @@
     "test": "vitest run",
     "test:rules": "firebase emulators:exec --only firestore --project demo-mnf \"vitest run --config vitest.emulator.config.ts\"",
     "test:all": "npm run test && npm run test:rules",
-    "test:e2e": "tsx scripts/e2e.ts",
+    "test:e2e": "npm run build:emulator && firebase emulators:exec --only firestore,hosting --project demo-mnf \"tsx scripts/e2e.ts\"",
     "emulators": "firebase emulators:start --only firestore,hosting --project demo-mnf",
     "mnf": "tsx cli/index.ts",
     "setup:firebase": "tsx scripts/setup-firebase.ts",
-    "deploy:rules": "firebase deploy --only firestore"
+    "deploy:rules": "firebase deploy --only firestore",
+    "build:emulator": "tsx scripts/build-for-emulator.ts"
   },
   "dependencies": {
     "@astrojs/react": "^5.0.7",

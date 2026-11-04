@@ -376,8 +376,17 @@ export function planMatchStatus(
       for (const a of reports.filter((r) => r.status === 'published')) {
         plan.ops.push(op('articles', a.id, 'update', a, { ...a, status: 'unpublished', revision: a.revision + 1, updatedAt: now }, `Unpublished match report "${a.title}" along with its match`));
       }
-    } else if (reports.some((r) => r.status === 'unpublished')) {
-      plan.warnings.push(warn('REPORT_STILL_UNPUBLISHED', `The match report (${reports.map((r) => `/news/${r.id}`).join(', ')}) is still unpublished. Run "article republish <slug>" to bring it back.`));
+    } else {
+      // Reports that were unpublished *together with* this match (same operation → same updatedAt)
+      // come back with it. A report someone unpublished separately stays unpublished.
+      const cascaded = reports.filter((r) => r.status === 'unpublished' && r.updatedAt === m.updatedAt);
+      for (const a of cascaded) {
+        plan.ops.push(op('articles', a.id, 'update', a, { ...a, status: 'published', revision: a.revision + 1, updatedAt: now }, `Republished match report "${a.title}" along with its match`));
+      }
+      const left = reports.filter((r) => r.status === 'unpublished' && !cascaded.includes(r));
+      if (left.length) {
+        plan.warnings.push(warn('REPORT_STILL_UNPUBLISHED', `The match report (${left.map((r) => `/news/${r.id}`).join(', ')}) was unpublished separately and stays that way. Run "article republish <slug>" to bring it back.`));
+      }
     }
   }
   plan.details.statChanges = statChanges(snap.matches, after, snap.players);

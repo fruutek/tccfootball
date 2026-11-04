@@ -72,6 +72,8 @@ export function connect(opts: { project?: string } = {}): Connection {
 
   if (!getApps().length) {
     if (emulator) {
+      // No credentials are needed for the emulator; don't let the auth library probe for a cloud metadata server.
+      process.env['METADATA_SERVER_DETECTION'] ??= 'none';
       initializeApp({ projectId });
     } else if (process.env['MNF_SERVICE_ACCOUNT_JSON']) {
       let sa: Record<string, unknown>;

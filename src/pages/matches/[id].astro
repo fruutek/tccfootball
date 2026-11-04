@@ -1,0 +1,14 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Match from '../../islands/Match';
+
+// One static shell. Firebase Hosting rewrites /matches/** to this page, and the
+// island reads the id from the address bar and loads the data from Firestore.
+export function getStaticPaths() {
+  return [{ params: { id: '_' } }];
+}
+---
+
+<BaseLayout title="Match centre · Monday Night Football">
+  <Match client:load />
+</BaseLayout>
