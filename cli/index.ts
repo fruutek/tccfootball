@@ -51,7 +51,8 @@ WRITE  (add --apply to commit)
   match unpublish|republish|delete <id>
   player add --name "Full Name" [--nickname N] [--alias A]... [--bio TEXT]
   player update <name> [--display-name N] [--nickname N|--clear-nickname] [--add-alias A] [--remove-alias A]
-                       [--bio T|--clear-bio] [--photo FILE|--remove-photo] [--archive|--unarchive]
+                       [--bio T|--clear-bio] [--photo FILE|--photo-path /photos/x.webp|--remove-photo] [--archive|--unarchive]
+  photo prepare <player-id> <image-file>      optimise a photo into public/photos/ (needs no database access)
   article publish (--file F | --stdin)        publish an article (category, title, standfirst, body …)
   article edit    (--file F | --stdin)        update an existing article (spec.slug required)
   article unpublish|republish|delete <slug>
@@ -93,6 +94,7 @@ const { values: flags, positionals } = parseArgs({
     bio: { type: 'string' },
     'clear-bio': { type: 'boolean' },
     photo: { type: 'string' },
+    'photo-path': { type: 'string' },
     'remove-photo': { type: 'boolean' },
     archive: { type: 'boolean' },
     unarchive: { type: 'boolean' },
@@ -133,6 +135,16 @@ async function main(): Promise<number> {
   const [group, action, ...rest] = positionals;
   if (!group || group === 'help') {
     emit(HELP);
+    return 0;
+  }
+
+  // Photo preparation touches only local files, so it needs no database connection.
+  if (group === 'photo' && action === 'prepare') {
+    const [playerId, file] = rest;
+    if (!playerId || !file) throw new UsageError('Usage: photo prepare <player-id> <image-file>');
+    const prepared = await preparePhoto(file, playerId);
+    prepared.write();
+    emit(`✔ Optimised ${Math.round(prepared.bytes / 1024)} KB → public${prepared.publicPath}\nNext: commit and push it so Hosting serves it, then attach it to the profile:\n  player update <name> --photo-path ${prepared.publicPath} --apply`);
     return 0;
   }
 
@@ -228,6 +240,7 @@ async function main(): Promise<number> {
           prepared = await preparePhoto(String(flags['photo']), r.playerId);
           patch['photo'] = prepared.publicPath;
         }
+        if (flags['photo-path']) patch['photo'] = String(flags['photo-path']);
         if (flags['remove-photo']) patch['photo'] = null;
         const plan = planUpdatePlayer(snap, ref, patch, ctx);
         const code = await finish(plan);

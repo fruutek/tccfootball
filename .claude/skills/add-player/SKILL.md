@@ -5,6 +5,8 @@ description: Create a new player profile when the owner explicitly says to ("Tom
 
 # Add a player
 
+> **Running commands:** where this skill says `npm run mnf -- X`, in a session without database credentials run the **Publish workflow** with `command: X` (see `CLAUDE.md` → "Reaching the database"): dry run first, then the identical inputs with `apply: "true"`.
+
 1. Only proceed when the owner **explicitly** asked to add/create the player. If a result mentioned an unknown name, ask first.
 2. Get the **full display name** the site should show. Display names must be unique. If another player shares the first name
    (e.g. "Chris W" and "Chris B"), use a distinguishing name — otherwise plain "Chris" becomes ambiguous in future messages.

@@ -5,6 +5,8 @@ description: Publish a Monday night match result (and optionally its match repor
 
 # Publish a result
 
+> **Running commands:** where this skill says `npm run mnf -- X`, in a session without database credentials run the **Publish workflow** with `command: X` (see `CLAUDE.md` → "Reaching the database"): dry run first, then the identical inputs with `apply: "true"`.
+
 Read `CLAUDE.md` first (rules + spec format). Then:
 
 1. **Orient.** `npm run mnf -- status` (check `Target:` and `Today:`), then `npm run mnf -- players` to see the roster

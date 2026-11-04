@@ -5,6 +5,8 @@ description: Change a player's profile — display name, nickname, aliases, biog
 
 # Update a player profile
 
+> **Running commands:** where this skill says `npm run mnf -- X`, in a session without database credentials run the **Publish workflow** with `command: X` (see `CLAUDE.md` → "Reaching the database"): dry run first, then the identical inputs with `apply: "true"`.
+
 Statistics are never edited here — they come from matches. Only profile fields change. The player **id never changes**,
 so history and links stay intact when a name does.
 
