@@ -4,42 +4,113 @@
     "indexes": "firestore.indexes.json"
   },
   "hosting": {
+    "site": "tccfootball",
     "public": "dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "cleanUrls": true,
     "trailingSlash": false,
     "rewrites": [
-      { "source": "/matches/**", "destination": "/matches/_.html" },
-      { "source": "/players/**", "destination": "/players/_.html" },
-      { "source": "/news/**", "destination": "/news/_.html" }
+      {
+        "source": "/matches/**",
+        "destination": "/matches/_.html"
+      },
+      {
+        "source": "/players/**",
+        "destination": "/players/_.html"
+      },
+      {
+        "source": "/news/**",
+        "destination": "/news/_.html"
+      }
     ],
     "headers": [
       {
         "source": "/_astro/**",
-        "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
       },
       {
         "source": "/photos/**",
-        "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      },
+      {
+        "source": "/",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/@(matches|players|news|leaderboards)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/@(matches|players|news)/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=0, must-revalidate"
+          }
+        ]
       },
       {
         "source": "**/*.html",
-        "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=0, must-revalidate"
+          }
+        ]
       },
       {
         "source": "**",
         "headers": [
-          { "key": "X-Content-Type-Options", "value": "nosniff" },
-          { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-          { "key": "X-Frame-Options", "value": "SAMEORIGIN" }
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "SAMEORIGIN"
+          }
         ]
       }
     ]
   },
   "emulators": {
-    "firestore": { "port": 8080 },
-    "hosting": { "port": 5000 },
-    "ui": { "enabled": false },
+    "firestore": {
+      "port": 8080
+    },
+    "hosting": {
+      "port": 5000
+    },
+    "ui": {
+      "enabled": false
+    },
     "singleProjectMode": true
   }
 }

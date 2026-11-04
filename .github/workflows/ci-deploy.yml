@@ -86,8 +86,7 @@ jobs:
     environment: production
     permissions:
       contents: read
-      checks: write
-      pull-requests: write
+      id-token: write # lets this job prove who it is to Google (keyless — no stored passwords or keys)
     steps:
       - uses: actions/checkout@v4
 
@@ -101,11 +100,35 @@ jobs:
       # Builds against the committed public config in src/config/firebase.public.json.
       - run: npm run build
 
-      # Hosting only. The key in FIREBASE_SERVICE_ACCOUNT can deploy the site and nothing else
-      # (see docs/SETUP.md) — it cannot read or write Firestore data or change security rules.
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      # Keyless sign-in to Google: GitHub vouches for this exact workflow on `main`, and Google exchanges
+      # that for a short-lived token for a service account that can deploy Hosting and nothing else.
+      # If that trust link has not been created yet this step fails harmlessly and the deploy is skipped.
+      - name: Sign in to Google (keyless)
+        id: auth
+        continue-on-error: true
+        uses: google-github-actions/auth@v2
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: ${{ vars.FIREBASE_PROJECT_ID }}
-          channelId: live
+          workload_identity_provider: projects/495407655486/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: mnf-hosting-deployer@tccfootball.iam.gserviceaccount.com
+
+      - name: Automatic deploy is not set up yet
+        if: steps.auth.outcome != 'success'
+        run: |
+          echo "::warning title=Deploy skipped::Keyless Google access is not configured for this repository yet, so the site was not deployed from CI. Tests passed."
+
+      - name: Deploy Hosting
+        if: steps.auth.outcome == 'success'
+        run: npx firebase deploy --only hosting --project tccfootball --non-interactive
+
+      - name: Smoke-test the live site
+        if: steps.auth.outcome == 'success'
+        run: |
+          set -e
+          base=https://tccfootball.web.app
+          curl -fsS "$base/" | grep -q "Monday Night Football"
+          # The shells behind the Hosting rewrites must answer for ids that do not exist as files.
+          for p in /matches/2026-01-05 /players/anyone /news/any-article /leaderboards /matches; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$base$p")
+            echo "$p -> $code"
+            [ "$code" = "200" ]
+          done
