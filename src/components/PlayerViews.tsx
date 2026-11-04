@@ -123,7 +123,7 @@ export function PlayerProfile({ idx, playerId }: { idx: Index; playerId: string 
           {p.nickname && <div className="phero__nick">“{p.nickname}”</div>}
           <div className="phero__meta">
             <span>
-              First appearance: <b>{s.firstAppearance ? formatLongDate(s.firstAppearance) : 'not yet played'}</b>
+              First appearance: <b>{s.firstAppearance ? formatLongDate(s.firstAppearance) : 'no recorded match yet'}</b>
             </span>
             {s.lastAppearance && (
               <span>
@@ -136,7 +136,7 @@ export function PlayerProfile({ idx, playerId }: { idx: Index; playerId: string 
         </div>
       </header>
 
-      {s.appearances === 0 ? (
+      {s.appearances === 0 && s.startingGoals + s.startingAssists === 0 ? (
         <Empty title="Yet to make an appearance">Stats appear here as soon as {p.displayName} plays a recorded match.</Empty>
       ) : (
         <>
@@ -144,8 +144,8 @@ export function PlayerProfile({ idx, playerId }: { idx: Index; playerId: string 
             <SectionHead title="Career" />
             <div className="tiles num">
               <Tile label="Appearances" value={s.appearances} />
-              <Tile label="Goals" value={s.goals} hot />
-              <Tile label="Assists" value={s.assists} />
+              <Tile label="Goals" value={s.goals} hot {...(s.startingGoals > 0 ? { sub: `incl. ${s.startingGoals} before match records` } : {})} />
+              <Tile label="Assists" value={s.assists} {...(s.startingAssists > 0 ? { sub: `incl. ${s.startingAssists} before match records` } : {})} />
               <Tile label="Win rate" value={pct(s.winPct)} sub={`${s.wins} wins`} hot />
               <Tile label="Player of match" value={s.potm} />
               <Tile label="Goals / game" value={s.goalsPerGame.toFixed(2)} />
@@ -156,6 +156,13 @@ export function PlayerProfile({ idx, playerId }: { idx: Index; playerId: string 
             </div>
           </section>
 
+          {s.appearances === 0 && (
+            <p className="note">
+              These totals were recorded before match records began, so there is no match-by-match history yet. Wins, form and averages start with the first recorded game.
+            </p>
+          )}
+
+          {s.appearances > 0 && (<>
           <section className="card card--pad">
             <div className="sec-head" style={{ marginBottom: 12 }}>
               <h2>Record</h2>
@@ -246,6 +253,7 @@ export function PlayerProfile({ idx, playerId }: { idx: Index; playerId: string 
               )}
             </section>
           </div>
+          </>)}
         </>
       )}
     </div>

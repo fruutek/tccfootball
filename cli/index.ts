@@ -12,7 +12,7 @@ import { buildMatchFacts, buildRoundupFacts } from '../src/shared/facts';
 import { buildLeaderboard, LEADERBOARDS, LEADERBOARD_ORDER, minAppearancesFor, type LeaderboardKey } from '../src/shared/leaderboards';
 import { resolveName } from '../src/shared/names';
 import { parsePeriod, periodKey } from '../src/shared/seasons';
-import { computeStats, matchesForPeriod, statsFor } from '../src/shared/stats';
+import { computeStats, matchesForPeriod, startingTotalsOf, statsFor } from '../src/shared/stats';
 import { connect, SetupError } from './firebase';
 import { preparePhoto } from './images';
 import { renderOutcome, table } from './render';
@@ -23,7 +23,7 @@ import { execute } from './services/execute';
 import { auditData } from './services/integrity';
 import { describeMatch, nameLookup, settingsOrDefault } from './services/common';
 import { planEditMatch, planMatchStatus, planPublishMatch } from './services/matches';
-import { planAddPlayer, planUpdatePlayer } from './services/players';
+import { planAddPlayer, planAddPlayers, planUpdatePlayer } from './services/players';
 import { planClearFixture, planSetFixture, planSetSettings, SETTINGS_KEYS } from './services/settings';
 import { matchToSpec } from './spec';
 import type { Ctx, Outcome, Plan } from './types';
@@ -49,9 +49,10 @@ WRITE  (add --apply to commit)
   match publish  (--file F | --stdin)         publish a new result (+ optional report)
   match edit <id> (--file F | --stdin)        correct a published result
   match unpublish|republish|delete <id>
-  player add --name "Full Name" [--nickname N] [--alias A]... [--bio TEXT]
+  player add --name "Full Name" [--nickname N] [--alias A]... [--bio TEXT] [--starting-goals N] [--starting-assists N]
+  player add-many (--file F | --stdin)        a whole roster at once: {"players":[{"name":"Peter","startingTotals":{"goals":3}}, …]}
   player update <name> [--display-name N] [--nickname N|--clear-nickname] [--add-alias A] [--remove-alias A]
-                       [--bio T|--clear-bio] [--photo FILE|--photo-path /photos/x.webp|--remove-photo] [--archive|--unarchive]
+                       [--bio T|--clear-bio] [--starting-goals N] [--starting-assists N] [--clear-starting-totals] [--photo FILE|--photo-path /photos/x.webp|--remove-photo] [--archive|--unarchive]
   photo prepare <player-id> <image-file>      optimise a photo into public/photos/ (needs no database access)
   article publish (--file F | --stdin)        publish an article (category, title, standfirst, body …)
   article edit    (--file F | --stdin)        update an existing article (spec.slug required)
@@ -95,6 +96,9 @@ const { values: flags, positionals } = parseArgs({
     'clear-bio': { type: 'boolean' },
     photo: { type: 'string' },
     'photo-path': { type: 'string' },
+    'starting-goals': { type: 'string' },
+    'starting-assists': { type: 'string' },
+    'clear-starting-totals': { type: 'boolean' },
     'remove-photo': { type: 'boolean' },
     archive: { type: 'boolean' },
     unarchive: { type: 'boolean' },
@@ -186,7 +190,7 @@ async function main(): Promise<number> {
     case 'players':
     case 'player': {
       if (group === 'players' || action === 'list' || !action) {
-        const stats = computeStats(snap.matches);
+        const stats = computeStats(snap.matches, { startingTotals: startingTotalsOf(snap.players) });
         const rows = [...snap.players]
           .sort((a, b) => a.displayName.localeCompare(b.displayName))
           .map((p) => {
@@ -203,7 +207,7 @@ async function main(): Promise<number> {
           return 2;
         }
         const p = snap.players.find((x) => x.id === r.playerId)!;
-        const s = statsFor(computeStats(snap.matches, { formLength: settings.formLength }), p.id);
+        const s = statsFor(computeStats(snap.matches, { formLength: settings.formLength, startingTotals: startingTotalsOf(snap.players) }), p.id);
         emit(JSON.stringify({ player: p, stats: { ...s, history: s.history.slice(0, 10) } }, null, 2));
         return 0;
       }
@@ -214,12 +218,16 @@ async function main(): Promise<number> {
               ...(flags['nickname'] ? { nickname: String(flags['nickname']) } : {}),
               ...(flags['alias'] ? { aliases: flags['alias'] as string[] } : {}),
               ...(flags['bio'] ? { bio: String(flags['bio']) } : {}),
+              ...(flags['starting-goals'] || flags['starting-assists']
+                ? { startingTotals: { ...(flags['starting-goals'] ? { goals: Number(flags['starting-goals']) } : {}), ...(flags['starting-assists'] ? { assists: Number(flags['starting-assists']) } : {}) } }
+                : {}),
               ...(flags['fictional'] ? { fictional: true } : {}),
               ...(flags['instruction'] ? { instruction: String(flags['instruction']) } : {}),
             }
           : readInput();
         return finish(planAddPlayer(snap, body, ctx));
       }
+      if (action === 'add-many') return finish(planAddPlayers(snap, readInput(), ctx));
       if (action === 'update') {
         const ref = arg();
         const patch: Record<string, unknown> = {};
@@ -230,6 +238,13 @@ async function main(): Promise<number> {
         if (flags['remove-alias']) patch['removeAliases'] = flags['remove-alias'];
         if (flags['bio']) patch['bio'] = String(flags['bio']);
         if (flags['clear-bio']) patch['bio'] = null;
+        if (flags['starting-goals'] || flags['starting-assists']) {
+          patch['startingTotals'] = {
+            ...(flags['starting-goals'] ? { goals: Number(flags['starting-goals']) } : {}),
+            ...(flags['starting-assists'] ? { assists: Number(flags['starting-assists']) } : {}),
+          };
+        }
+        if (flags['clear-starting-totals']) patch['startingTotals'] = null;
         if (flags['archive']) patch['status'] = 'archived';
         if (flags['unarchive']) patch['status'] = 'active';
         if (flags['instruction']) patch['instruction'] = String(flags['instruction']);
@@ -343,7 +358,7 @@ async function main(): Promise<number> {
       if (action === 'show') {
         const period = parsePeriod(flags['period'] ? String(flags['period']) : null);
         const inPeriod = matchesForPeriod(snap.matches, period, settings.seasonStartMonth);
-        const stats = computeStats(snap.matches, { period, seasonStartMonth: settings.seasonStartMonth, formLength: settings.formLength });
+        const stats = computeStats(snap.matches, { period, seasonStartMonth: settings.seasonStartMonth, formLength: settings.formLength, startingTotals: startingTotalsOf(snap.players) });
         const min = minAppearancesFor(inPeriod.length, settings.minAppearances);
         const keys = flags['board'] ? [String(flags['board']) as LeaderboardKey] : LEADERBOARD_ORDER;
         emit(`Period: ${periodKey(period)}  (${inPeriod.length} matches; rate boards need ≥${min} appearances)`);

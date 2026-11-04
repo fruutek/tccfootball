@@ -3,7 +3,7 @@
  * All numbers come from the shared stats engine — no page does its own maths.
  */
 import { listMonths, listSeasons, periodKey, type Period } from '../shared/seasons';
-import { compareMatches, computeStats, matchesForPeriod, type PlayerStats } from '../shared/stats';
+import { compareMatches, computeStats, matchesForPeriod, startingTotalsOf, type PlayerStats } from '../shared/stats';
 import type { Article, Match, Player, SiteSettings } from '../shared/schema';
 import type { SiteData } from './data';
 
@@ -19,6 +19,8 @@ export interface Index {
   seasons: string[];
   months: string[];
   nameOf: (id: string) => string;
+  /** True when anyone has goals/assists recorded from before match tracking began. */
+  hasStartingTotals: boolean;
   stats: (period: Period) => Map<string, PlayerStats>;
   matchCount: (period: Period) => number;
   reportFor: (matchId: string) => Article | undefined;
@@ -42,12 +44,13 @@ export function getIndex(data: SiteData): Index {
     .sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : a.publishedAt > b.publishedAt ? -1 : 0));
   const dates = matchesAsc.map((m) => m.date);
 
+  const startingTotals = startingTotalsOf(data.players);
   const statsCache = new Map<string, Map<string, PlayerStats>>();
   const stats = (period: Period) => {
     const key = periodKey(period);
     let s = statsCache.get(key);
     if (!s) {
-      s = computeStats(matchesAsc, { period, seasonStartMonth: startMonth, formLength });
+      s = computeStats(matchesAsc, { period, seasonStartMonth: startMonth, formLength, startingTotals });
       statsCache.set(key, s);
     }
     return s;
@@ -65,6 +68,7 @@ export function getIndex(data: SiteData): Index {
     seasons: listSeasons(dates, startMonth),
     months: listMonths(dates),
     nameOf: (id) => players.get(id)?.displayName ?? id,
+    hasStartingTotals: startingTotals.size > 0,
     stats,
     matchCount: (period) => matchesForPeriod(matchesAsc, period, startMonth).length,
     reportFor: (matchId) => articlesDesc.find((a) => a.matchId === matchId && a.category === 'match-report'),

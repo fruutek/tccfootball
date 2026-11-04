@@ -5,8 +5,8 @@ The single definition lives in [`src/shared/schema.ts`](../src/shared/schema.ts)
 
 ## Design rules
 
-1. **Matches are the only source of truth.** No collection stores goals, assists, appearances, wins, win %, streaks or
-   rankings. They are derived on demand by [`src/shared/stats.ts`](../src/shared/stats.ts), used identically by the site and
+1. **Matches are the source of truth.** No collection stores goals, assists, appearances, wins, win %, streaks or
+   rankings. The single, deliberate exception is a player's optional **`startingTotals`** (below): numbers the owner stated from *before* match records began. They are derived on demand by [`src/shared/stats.ts`](../src/shared/stats.ts), used identically by the site and
    the CLI. There is nothing to fall out of sync, and editing a historical match re-derives everything.
 2. **Teams belong to a match, not to the group.** Each match carries its own two named rosters.
 3. **Stable ids.** Every id is created once and never changes (renaming a player or correcting a match date does not move it).
@@ -37,6 +37,7 @@ No composite indexes are needed (`firestore.indexes.json` is empty): the site's 
 | `aliases` | string[] ≤ 10 | Extra spellings used **only** to match names in instructions. |
 | `photo` | `/photos/<id>.<hash>.webp`? | Static asset deployed by Hosting. Optional — a deterministic initials avatar is used otherwise. |
 | `bio` | string ≤ 600? | |
+| `startingTotals` | `{ goals?, assists? }`? | Totals from **before match records began** (e.g. "Peter had 3 goals"). Counted in **all-time** goals/assists only, shown on the profile as "incl. N before match records", never in per-game averages, never in season/month views, and they create **no** appearances. Set only for numbers the owner actually stated. **If the matches behind them are later recorded, clear them** (`player update <name> --clear-starting-totals`) or those goals would be counted twice. |
 | `status` | `active` \| `archived` | Archived players keep their history. |
 | `fictional` | `true`? | Marks demo data (removed by `demo purge`). |
 | `revision`, `createdAt`, `updatedAt` | | Optimistic-concurrency counter + ISO timestamps. |
@@ -141,12 +142,12 @@ Computed in [`src/shared/stats.ts`](../src/shared/stats.ts) from published match
 | Statistic | Definition |
 |---|---|
 | Appearances | Matches whose line-up includes the player |
-| Goals | `goal` events with the player as scorer (own goals and unknown scorers excluded) |
+| Goals | `goal` events with the player as scorer (own goals and unknown scorers excluded), **plus `startingTotals.goals` in the all-time view** |
 | Assists | `goal.assistId` links + `assist` events |
 | Own goals | `own_goal` events by the player (tracked, not counted as goals) |
 | W / D / L | Result of the team the player was on **in that match**, from the final score |
 | Win % | wins ÷ appearances × 100 |
-| Goals per game | goals ÷ appearances |
+| Goals per game | goals **in recorded matches** ÷ appearances (starting totals are excluded, so it is never inflated) |
 | Player of the match | matches where the player is `playerOfTheMatch` |
 | Form | Last `formLength` results, most recent first |
 | Current win streak | Consecutive wins ending at the player's latest appearance; a draw or loss resets it, missing a week does not |

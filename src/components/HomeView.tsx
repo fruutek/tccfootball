@@ -63,9 +63,17 @@ export function HomeView({ idx, today = localToday() }: { idx: Index; today?: st
   }, [idx]);
 
   if (!latest) {
+    const hasScorers = [...idx.stats({ kind: 'all' }).values()].some((s) => s.goals > 0);
     return (
       <div className="page">
         <EmptyBoard />
+        {hasScorers && (
+          <section>
+            <SectionHead title="Top scorers" href="/leaderboards" linkLabel="Leaderboards" />
+            <div className="card"><TopList idx={idx} board="goals" period={{ kind: 'all' }} /></div>
+            <p className="note" style={{ marginTop: 10 }}>Goals recorded before match tracking began.</p>
+          </section>
+        )}
         {fixture && (
           <div className="card card--pad fixture">
             <span className="eyebrow">Next fixture</span>

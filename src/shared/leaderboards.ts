@@ -100,7 +100,9 @@ export function buildLeaderboard(
   const def = LEADERBOARDS[key];
   const nameOf = opts.nameOf ?? ((id: string) => id);
   const eligible = [...all].filter((s) => {
-    if (s.appearances === 0) return false;
+    // A player with only starting totals (no recorded matches yet) can still top a goals/assists board.
+    if (s.appearances === 0 && s.startingGoals + s.startingAssists === 0) return false;
+    if (key === 'appearances' && s.appearances === 0) return false;
     if (def.rate && s.appearances < opts.minAppearances) return false;
     // Counting boards list only players who have actually done the thing.
     if (!def.rate && key !== 'appearances' && def.value(s) <= 0) return false;

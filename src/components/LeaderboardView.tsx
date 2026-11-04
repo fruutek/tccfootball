@@ -77,7 +77,10 @@ export function LeaderboardView({ idx, initial }: { idx: Index; initial?: { boar
         <h1 className="page-title">
           <small>THE TABLE</small>Leaderboards
         </h1>
-        <p className="page-sub">{def.blurb}. Every figure is calculated from the recorded matches — nothing is typed in by hand.</p>
+        <p className="page-sub">
+          {def.blurb}. Every figure is calculated from the recorded matches
+          {idx.hasStartingTotals ? ', plus a few goals recorded before tracking began (marked as such).' : ' — nothing is typed in by hand.'}
+        </p>
       </header>
 
       <div className="stack-sm">
@@ -113,7 +116,7 @@ export function LeaderboardView({ idx, initial }: { idx: Index; initial?: { boar
 
       {rows.length === 0 ? (
         <Empty title="Nobody on this board yet" icon={<IconTable />}>
-          {matchCount === 0 ? 'No matches fall in this period.' : def.rate ? `Players need at least ${min} appearances for ${def.label.toLowerCase()}.` : 'Nobody has registered a number here yet.'}
+          {matchCount === 0 ? `No matches fall in this period.${idx.hasStartingTotals && period.kind !== 'all' ? ' Goals recorded before match tracking began count in All-time only.' : ''}` : def.rate ? `Players need at least ${min} appearances for ${def.label.toLowerCase()}.` : 'Nobody has registered a number here yet.'}
         </Empty>
       ) : (
         <>
@@ -173,7 +176,12 @@ export function LeaderboardView({ idx, initial }: { idx: Index; initial?: { boar
               </tbody>
             </table>
           </div>
-          <p className="note">Tap a column heading to sort by it. Ties share a rank (=).</p>
+          <p className="note">
+            Tap a column heading to sort by it. Ties share a rank (=).
+            {idx.hasStartingTotals && (period.kind === 'all'
+              ? ' All-time totals include goals recorded before match tracking began.'
+              : ' Goals recorded before match tracking began count in All-time only.')}
+          </p>
         </>
       )}
     </div>
