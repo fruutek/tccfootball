@@ -120,9 +120,9 @@ export function EmptyBoard() {
   return (
     <div className="board">
       <PitchBackdrop />
-      <div className="board__body" style={{ textAlign: 'center', padding: '56px 20px' }}>
-        <IconBall className="" />
-        <div className="display" style={{ fontSize: 40, marginTop: 8 }}>
+      <div className="board__body" style={{ textAlign: 'center', justifyItems: 'center', padding: '56px 20px', gap: 10 }}>
+        <IconBall className="empty-ball" />
+        <div className="display" style={{ fontSize: 40 }}>
           Kick-off soon
         </div>
         <p className="dim">The first result will appear here the moment it is published.</p>

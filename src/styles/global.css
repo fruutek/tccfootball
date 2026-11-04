@@ -459,3 +459,6 @@ input.field { min-width: 0; width: 100%; max-width: 320px; }
 }
 .tl__ev b { white-space: nowrap; }
 .hrow__date { line-height: 1.25; }
+
+/* empty scoreboard */
+.empty-ball { width: 44px; height: 44px; color: var(--line-strong); }
