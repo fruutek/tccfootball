@@ -5,6 +5,8 @@ description: Write and publish a news article — player spotlight, humorous pie
 
 # Publish an article
 
+> **Running commands:** where this skill says `npm run mnf -- X`, in a session without database credentials run the **Publish workflow** with `command: X` (see `CLAUDE.md` → "Reaching the database"): dry run first, then the identical inputs with `apply: "true"`.
+
 Categories: `match-report`, `spotlight`, `roundup`, `humour`, `records`.
 
 1. **Gather facts, don't recall them.** For anything with numbers, get them from the data:

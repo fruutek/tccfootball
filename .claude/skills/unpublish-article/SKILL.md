@@ -5,6 +5,8 @@ description: Take an article or a match offline, bring it back, or delete it per
 
 # Unpublish, republish or delete
 
+> **Running commands:** where this skill says `npm run mnf -- X`, in a session without database credentials run the **Publish workflow** with `command: X` (see `CLAUDE.md` → "Reaching the database"): dry run first, then the identical inputs with `apply: "true"`.
+
 Prefer **unpublish** (reversible, keeps the content) over **delete**. All of these are reversible via `revert` while the audit log has them.
 
 **Articles**

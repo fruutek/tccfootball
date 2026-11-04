@@ -5,6 +5,8 @@ description: Recalculate and audit every player statistic and the integrity of a
 
 # Recalculate and audit
 
+> **Running commands:** where this skill says `npm run mnf -- X`, in a session without database credentials run the **Publish workflow** with `command: X` (see `CLAUDE.md` → "Reaching the database"): dry run first, then the identical inputs with `apply: "true"`.
+
 Statistics are never stored — they are recomputed from the matches on every page view. So "recalculate" means
 **verify that the matches are consistent and the totals add up**.
 

@@ -1,0 +1,77 @@
+name: Publish
+
+# Runs ONE `mnf` publishing command against the live Firestore database.
+#
+# This is how Claude publishes your results when no database credentials exist in its session:
+# it starts this workflow with the request, reads the log, and (after a clean dry run) starts it
+# again with "apply" ticked. You never open this page yourself.
+#
+# Security:
+#   * Keyless. GitHub proves to Google that this exact workflow is running on `main` of this repository;
+#     Google then hands out a short-lived token for the `mnf-publisher` account, which can read and write
+#     Firestore and do nothing else. No password or key is stored anywhere.
+#   * Only people with write access to the repository can start it.
+#   * The inputs are untrusted text: they are never placed in a shell (see scripts/run-mnf.ts and its tests).
+#   * THIS REPOSITORY IS PUBLIC, so the log of every run — including the request — is public too.
+#     Publish only what is meant for the website anyway (results, names, reports).
+
+run-name: "mnf ${{ inputs.command }} (${{ inputs.apply && 'apply' || 'dry run' }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'mnf command, e.g. "match publish", "players", "stats audit --table" (see docs/PUBLISHING.md)'
+        required: true
+        type: string
+      apply:
+        description: 'Write the change. Leave off for a dry run.'
+        required: false
+        type: boolean
+        default: false
+      request:
+        description: 'JSON request for publish / edit / add commands'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write # lets this job prove to Google who it is (keyless)
+
+# One publish at a time, never cancelled half-way.
+concurrency:
+  group: publish-production
+  cancel-in-progress: false
+
+jobs:
+  mnf:
+    name: Run mnf
+    if: github.repository == 'fruutek/tccfootball' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Sign in to Google (keyless, publisher account)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/495407655486/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: mnf-publisher@tccfootball.iam.gserviceaccount.com
+
+      - name: Run the command
+        env:
+          # Inputs go in via the environment, never interpolated into the script.
+          MNF_COMMAND: ${{ inputs.command }}
+          MNF_APPLY: ${{ inputs.apply }}
+          MNF_REQUEST: ${{ inputs.request }}
+          MNF_PROJECT: tccfootball
+          MNF_ACTOR: claude-code via GitHub Actions
+        run: npx tsx scripts/run-mnf.ts

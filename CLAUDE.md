@@ -16,7 +16,7 @@ You are the publishing desk. Be accurate, be fast, be brief.
 * **Matches are the only source of truth.** Goals, assists, appearances, wins, win %, streaks,
   leaderboards — all are *derived* from match documents by one function (`src/shared/stats.ts`).
   Never store or hand-edit a statistic. "Recalculating" means running `stats audit`.
-* **Publishing a result needs no deploy.** The site reads Firestore in the browser; every write bumps
+* **Publishing a result needs no deploy** (the Publish workflow writes to Firestore directly). The site reads Firestore in the browser; every write bumps
   `settings/site.dataRevision`, so the next page load refetches. Only *code* and *player photos*
   (static files in `public/photos`) need a commit + push to `main` (GitHub Actions deploys).
 * Team membership is **per match** (`teams.a` / `teams.b`, with names like "Red Team", "Bibs"). Players
@@ -48,6 +48,35 @@ expect (`PRODUCTION project …` vs `EMULATOR …`) before using `--apply`.
 Skills with step-by-step playbooks live in `.claude/skills/` (publish-result, edit-result, add-player,
 update-player, publish-article, unpublish-article, weekly-roundup, audit-stats, set-fixture, undo-change).
 **Read the matching skill before acting.**
+
+## Reaching the database (read this first)
+
+There are two ways to run any `mnf` command. **Everywhere these docs and skills say `npm run mnf -- <command>`, use whichever applies:**
+
+1. **Direct** — only if this session has database credentials (`MNF_SERVICE_ACCOUNT_JSON` or Google application-default login). Check with
+   `npm run mnf -- status`; if it prints `Target: PRODUCTION project tccfootball`, carry on as written.
+2. **Through the "Publish" workflow** — the normal case in a cloud session, which has **no credentials by design**. GitHub runs the same CLI
+   with a restricted, keyless Google account (can read/write Firestore, nothing else; usable only by `publish.yml` on `main`).
+
+   Start it with the GitHub tool `actions_run_trigger` (`method: run_workflow`, `owner: fruutek`, `repo: tccfootball`,
+   `workflow_id: publish.yml`, `ref: main`) and these `inputs`:
+   * `command` — the command text without `npm run mnf --`, e.g. `match publish`, `players`, `stats audit --table`,
+     `player update "Josh Brown" --nickname Brownie`
+   * `request` — the JSON spec for commands that take one (`match publish`, `match edit <id>`, `article publish`, `player add`, `fixture set`)
+   * `apply` — `"false"` for a dry run, `"true"` to write
+
+   Then read the result: `actions_list` (`list_workflow_runs`, `resource_id: publish.yml`) for the newest run → wait until `status` is `completed`
+   (a run takes about a minute) → `get_job_logs` with `run_id`, `return_content: true`. The CLI's normal report is in the log, ending with
+   `MNF_RESULT exit=<code> mode=<apply|dry-run>`. **Exit 0 = fine; 2 = it needs input or refused (ask the owner); anything else = a problem to report.**
+
+   Rules for this route:
+   * **The repository and these logs are public.** Never put private chat, contact details or anything not meant for the website in `request`
+     or in `--instruction`. For the audit log use a neutral one-line summary ("Result for Mon 2 Nov"), not the owner's verbatim message.
+   * Dry-run first (`apply: "false"`), read the log, then run the **identical** inputs with `apply: "true"`. Do not apply a request you have not dry-run.
+   * Runs are queued one at a time; don't start a second until the first has finished.
+   * `--photo`, `--file`, `--stdin`, `--apply` and `--project` cannot appear inside `command` (the workflow controls them).
+   * **Photos:** run `npm run mnf -- photo prepare <player-id> <image>` locally (no credentials needed), commit + push `public/photos/…` through a
+     pull request so Hosting serves it, then `player update <name> --photo-path /photos/<file>` through the workflow.
 
 ## Non-negotiable rules
 

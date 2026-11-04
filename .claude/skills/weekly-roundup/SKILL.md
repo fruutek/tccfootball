@@ -5,6 +5,8 @@ description: Generate and publish the weekly roundup article — the week's resu
 
 # Weekly roundup
 
+> **Running commands:** where this skill says `npm run mnf -- X`, in a session without database credentials run the **Publish workflow** with `command: X` (see `CLAUDE.md` → "Reaching the database"): dry run first, then the identical inputs with `apply: "true"`.
+
 1. Make sure the week's result is published (`npm run mnf -- match list --limit 3`).
 2. `npm run mnf -- facts roundup` (latest week) or `facts roundup --week 2026-11-02` (any date inside the Monday–Sunday week).
    The JSON gives: matches with scorers/POTM, top performers, season leaderboards (goals, assists, wins, streaks),
