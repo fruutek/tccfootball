@@ -52,7 +52,6 @@ export function PlayersDirectory({ idx }: { idx: Index }) {
         <h1 className="page-title">
           <small>THE SQUAD</small>Players
         </h1>
-        <p className="page-sub">Everyone who has ever turned up on a Monday. Teams change every week, so every number follows the player, not the shirt.</p>
       </header>
       <div className="controls">
         <input className="field" type="search" placeholder="Search players" aria-label="Search players" value={q} onChange={(e) => setQ(e.target.value)} />
