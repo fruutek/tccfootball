@@ -79,7 +79,7 @@ export interface StatChange {
 
 const KEYS: (keyof StatLine)[] = ['appearances', 'goals', 'assists', 'wins', 'draws', 'losses', 'potm'];
 const line = (s: ReturnType<typeof statsFor>): StatLine => ({
-  appearances: s.appearances,
+  appearances: s.totalAppearances,
   goals: s.goals,
   assists: s.assists,
   wins: s.wins,

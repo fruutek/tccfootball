@@ -144,7 +144,7 @@ export function buildMatchFacts(
       const milestones: string[] = [];
       for (const t of GOAL_MILESTONES) if (prev.goals < t && now.goals >= t) milestones.push(`${ordinal(t)} career goal`);
       for (const t of ASSIST_MILESTONES) if (prev.assists < t && now.assists >= t) milestones.push(`${ordinal(t)} career assist`);
-      for (const t of APPEARANCE_MILESTONES) if (prev.appearances < t && now.appearances >= t) milestones.push(`${ordinal(t)} appearance`);
+      for (const t of APPEARANCE_MILESTONES) if (prev.totalAppearances < t && now.totalAppearances >= t) milestones.push(`${ordinal(t)} appearance`);
       playerFacts.push({
         playerId: pid,
         name: nameOf(pid),
@@ -153,11 +153,11 @@ export function buildMatchFacts(
         assists,
         ownGoals: entry?.ownGoals ?? 0,
         potm: match.playerOfTheMatch === pid,
-        debut: now.appearances === 1,
+        debut: now.totalAppearances === 1, // preseason games count: a regular is never a "debutant"
         hatTrick: goals >= 3,
         careerGoals: now.goals,
         careerAssists: now.assists,
-        careerAppearances: now.appearances,
+        careerAppearances: now.totalAppearances,
         seasonGoals: statsFor(seasonNow, pid).goals,
         winStreak: now.currentWinStreak,
         milestones,

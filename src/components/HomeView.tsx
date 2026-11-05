@@ -22,7 +22,7 @@ function TopList({ idx, board, period }: { idx: Index; board: 'goals' | 'assists
             <Avatar id={r.stats.playerId} name={idx.nameOf(r.stats.playerId)} photo={idx.players.get(r.stats.playerId)?.photo} size={38} />
             <span className="prow__name">
               {idx.nameOf(r.stats.playerId)}
-              <small>{r.stats.appearances} apps</small>
+              <small>{r.stats.totalAppearances} apps</small>
             </span>
             <span className="prow__val num">{r.value}</span>
           </a>

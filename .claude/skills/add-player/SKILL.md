@@ -6,7 +6,7 @@ description: Create a new player profile when the owner explicitly says to ("Tom
 # Add a player
 
 > For a whole roster at once use `player add-many` (one request, all-or-nothing): `{"players":[{"name":"Peter","startingTotals":{"goals":3}},{"name":"Katie"}],"instruction":"Initial roster"}`.
-> Add `startingTotals` only for goals/assists the owner stated from before match records began — see `CLAUDE.md` rule 11.
+> Add `startingTotals` (`appearances`, `goals`, `assists`) only for numbers the owner stated from before match records began; to change many players at once use `player update-many` — see `CLAUDE.md` rule 11.
 
 > **Running commands:** where this skill says `npm run mnf -- X`, in a session without database credentials run the **Publish workflow** with `command: X` (see `CLAUDE.md` → "Reaching the database"): dry run first, then the identical inputs with `apply: "true"`.
 

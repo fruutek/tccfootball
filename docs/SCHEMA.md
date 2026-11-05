@@ -37,7 +37,7 @@ No composite indexes are needed (`firestore.indexes.json` is empty): the site's 
 | `aliases` | string[] ≤ 10 | Extra spellings used **only** to match names in instructions. |
 | `photo` | `/photos/<id>.<hash>.webp`? | Static asset deployed by Hosting. Optional — a deterministic initials avatar is used otherwise. |
 | `bio` | string ≤ 600? | |
-| `startingTotals` | `{ goals?, assists? }`? | Totals from **before match records began** (e.g. "Peter had 3 goals"). Counted in **all-time** goals/assists only, shown on the profile as "incl. N before match records", never in per-game averages, never in season/month views, and they create **no** appearances. Set only for numbers the owner actually stated. **If the matches behind them are later recorded, clear them** (`player update <name> --clear-starting-totals`) or those goals would be counted twice. |
+| `startingTotals` | `{ appearances?, goals?, assists? }`? | **Preseason**: totals from *before match records began* (e.g. "4 games, 3 goals"). Count in **all-time** appearances, goals and assists only, and are labelled as such on the profile. They create **no results**: wins, draws, losses, win % and streaks use recorded matches only. Per-game averages use preseason goals and games as a pair. Not in season/month views. Set only for numbers the owner actually stated. **If the matches behind them are later recorded, clear them** (`player update <name> --clear-starting-totals`) or they would be counted twice. |
 | `status` | `active` \| `archived` | Archived players keep their history. |
 | `fictional` | `true`? | Marks demo data (removed by `demo purge`). |
 | `revision`, `createdAt`, `updatedAt` | | Optimistic-concurrency counter + ISO timestamps. |
@@ -141,13 +141,13 @@ Computed in [`src/shared/stats.ts`](../src/shared/stats.ts) from published match
 
 | Statistic | Definition |
 |---|---|
-| Appearances | Matches whose line-up includes the player |
+| Appearances | Matches whose line-up includes the player (**+ preseason games** in the all-time "Apps" figure; win/draw/loss figures use recorded matches only) |
 | Goals | `goal` events with the player as scorer (own goals and unknown scorers excluded), **plus `startingTotals.goals` in the all-time view** |
 | Assists | `goal.assistId` links + `assist` events |
 | Own goals | `own_goal` events by the player (tracked, not counted as goals) |
 | W / D / L | Result of the team the player was on **in that match**, from the final score |
 | Win % | wins ÷ appearances × 100 |
-| Goals per game | goals **in recorded matches** ÷ appearances (starting totals are excluded, so it is never inflated) |
+| Goals per game | (recorded goals + preseason goals) ÷ (recorded + preseason games) when preseason totals include games; otherwise recorded goals ÷ recorded games — a goals total without a games total can never inflate an average |
 | Player of the match | matches where the player is `playerOfTheMatch` |
 | Form | Last `formLength` results, most recent first |
 | Current win streak | Consecutive wins ending at the player's latest appearance; a draw or loss resets it, missing a week does not |

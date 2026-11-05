@@ -39,7 +39,7 @@ export const LEADERBOARDS: Record<LeaderboardKey, LeaderboardDef> = {
   },
   appearances: {
     key: 'appearances', label: 'Appearances', short: 'Apps', blurb: 'Most matches played', rate: false,
-    value: (s) => s.appearances, format: int,
+    value: (s) => s.totalAppearances, format: int,
     tiebreak: [(s) => s.wins, (s) => s.goals],
   },
   wins: {
@@ -100,10 +100,12 @@ export function buildLeaderboard(
   const def = LEADERBOARDS[key];
   const nameOf = opts.nameOf ?? ((id: string) => id);
   const eligible = [...all].filter((s) => {
-    // A player with only starting totals (no recorded matches yet) can still top a goals/assists board.
-    if (s.appearances === 0 && s.startingGoals + s.startingAssists === 0) return false;
-    if (key === 'appearances' && s.appearances === 0) return false;
-    if (def.rate && s.appearances < opts.minAppearances) return false;
+    // A player with only preseason totals (no recorded matches yet) can still appear on counting boards.
+    if (s.totalAppearances === 0 && s.startingGoals + s.startingAssists === 0) return false;
+    if (key === 'appearances' && s.totalAppearances === 0) return false;
+    // Win rate needs RECORDED results; goals per game can use preseason games too.
+    const basis = key === 'goalsPerGame' ? s.totalAppearances : s.appearances;
+    if (def.rate && basis < opts.minAppearances) return false;
     // Counting boards list only players who have actually done the thing.
     if (!def.rate && key !== 'appearances' && def.value(s) <= 0) return false;
     if (key === 'goalsPerGame' && s.goals === 0) return false;

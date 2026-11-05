@@ -7,7 +7,11 @@ import type { Ctx, Plan } from '../types';
 import { err, newPlan, op, seal, warn } from './common';
 
 const startingTotalsSchema = z
-  .object({ goals: z.number().int().min(0).max(999).optional(), assists: z.number().int().min(0).max(999).optional() })
+  .object({
+    appearances: z.number().int().min(0).max(999).optional(),
+    goals: z.number().int().min(0).max(999).optional(),
+    assists: z.number().int().min(0).max(999).optional(),
+  })
   .strict();
 
 export const playerAddSchema = z
@@ -45,9 +49,10 @@ export interface PlayerDetails {
 }
 
 /** Drops zeros; undefined when nothing is left. */
-function cleanTotals(t: { goals?: number | undefined; assists?: number | undefined } | null | undefined) {
+function cleanTotals(t: { appearances?: number | undefined; goals?: number | undefined; assists?: number | undefined } | null | undefined) {
   if (!t) return undefined;
-  const out: { goals?: number; assists?: number } = {};
+  const out: { appearances?: number; goals?: number; assists?: number } = {};
+  if (t.appearances) out.appearances = t.appearances;
   if (t.goals) out.goals = t.goals;
   if (t.assists) out.assists = t.assists;
   return Object.keys(out).length ? out : undefined;
@@ -191,7 +196,7 @@ export function planUpdatePlayer(snap: Snapshot, ref: string, input: unknown, ct
     if (JSON.stringify(next_ ?? null) !== JSON.stringify(cur.startingTotals ?? null)) {
       if (next_) next.startingTotals = next_;
       else delete next.startingTotals;
-      changes.push(next_ ? `starting totals (before match records) → ${[next_.goals ? `${next_.goals} goals` : '', next_.assists ? `${next_.assists} assists` : ''].filter(Boolean).join(', ')}` : 'starting totals removed');
+      changes.push(next_ ? `preseason totals → ${[next_.appearances ? `${next_.appearances} apps` : '', next_.goals ? `${next_.goals} goals` : '', next_.assists ? `${next_.assists} assists` : ''].filter(Boolean).join(', ')}` : 'preseason totals removed');
     }
   }
   if (patch.photo !== undefined) {
@@ -244,7 +249,7 @@ const addManySchema = z
   .strict();
 
 export interface AddManyDetails {
-  created: { id: string; name: string; startingTotals?: { goals?: number; assists?: number } }[];
+  created: { id: string; name: string; startingTotals?: { appearances?: number; goals?: number; assists?: number } }[];
 }
 
 /** Creates a whole roster in ONE atomic plan; any problem with any name means nothing is written. */
@@ -278,5 +283,60 @@ export function planAddPlayers(snap: Snapshot, input: unknown, ctx: Ctx): Plan<A
   }
   const withTotals = plan.details.created.filter((c) => c.startingTotals).length;
   plan.summary = `Create ${plan.details.created.length} players${withTotals ? ` (${withTotals} with starting totals)` : ''}`;
+  return seal(plan);
+}
+
+/* ------------------------------------------------------------------ change several players at once */
+
+const updateManySchema = z
+  .object({
+    updates: z
+      .array(playerPatchSchema.omit({ instruction: true }).extend({ player: z.string().trim().min(1) }).strict())
+      .min(1)
+      .max(80),
+    instruction: z.string().max(4000).optional(),
+  })
+  .strict();
+
+export interface UpdateManyDetails {
+  updated: { id: string; name: string; changes: string[] }[];
+  skipped: string[];
+}
+
+/** Applies profile changes to many players in ONE atomic plan; nothing is written unless every update is valid. */
+export function planUpdatePlayers(snap: Snapshot, input: unknown, ctx: Ctx): Plan<UpdateManyDetails> {
+  const plan = newPlan<UpdateManyDetails>('player update-many', { updated: [], skipped: [] });
+  const parsed = updateManySchema.safeParse(input);
+  if (!parsed.success) {
+    plan.errors.push(...parsed.error.issues.map((i) => err('SPEC_INVALID', `${i.path.join('.') || '(root)'}: ${i.message}`)));
+    return seal(plan);
+  }
+  if (parsed.data.instruction) plan.instruction = parsed.data.instruction;
+
+  let running: Snapshot = snap;
+  const touched = new Set<string>();
+  for (const { player, ...patch } of parsed.data.updates) {
+    const one = planUpdatePlayer(running, player, patch, ctx);
+    plan.clarifications.push(...one.clarifications);
+    const nothing = one.errors.length > 0 && one.errors.every((e) => e.code === 'NO_CHANGES');
+    if (nothing) {
+      plan.details.skipped.push(`${player} (already up to date)`);
+      continue;
+    }
+    for (const e of one.errors) plan.errors.push({ ...e, message: `${player}: ${e.message}` });
+    plan.warnings.push(...one.warnings);
+    if (!one.ok) continue;
+    const doc = one.ops[0]!;
+    if (touched.has(doc.id)) {
+      plan.errors.push(err('DUPLICATE_UPDATE', `${player}: ${doc.id} appears more than once in this request.`));
+      continue;
+    }
+    touched.add(doc.id);
+    plan.ops.push(doc);
+    const updated = doc.after as unknown as Player;
+    plan.details.updated.push({ id: updated.id, name: updated.displayName, changes: one.details.changes });
+    running = { ...running, players: running.players.map((p) => (p.id === updated.id ? updated : p)) };
+  }
+  plan.summary = `Update ${plan.details.updated.length} player${plan.details.updated.length === 1 ? '' : 's'}${plan.details.skipped.length ? ` (${plan.details.skipped.length} already up to date)` : ''}`;
   return seal(plan);
 }
