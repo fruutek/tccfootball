@@ -13,7 +13,7 @@ import { MemoryStore } from '../cli/store';
 import { execute } from '../cli/services/execute';
 import { auditData } from '../cli/services/integrity';
 import { planPublishMatch } from '../cli/services/matches';
-import { planAddPlayer, planAddPlayers, planUpdatePlayer } from '../cli/services/players';
+import { planAddPlayer, planAddPlayers, planUpdatePlayer, planUpdatePlayers } from '../cli/services/players';
 import type { Ctx } from '../cli/types';
 import { goal, mkMatch, mkPlayer } from './helpers';
 
@@ -169,5 +169,155 @@ describe('what the site shows before any match has been recorded', () => {
     expect(t).toContain('Peter');
     const none = text(renderToStaticMarkup(<HomeView idx={getIndex({ ...EMPTY_DATA, players: [mkPlayer('katie', 'Katie')] })} today="2026-11-04" />));
     expect(none).not.toContain('Top scorers');
+  });
+});
+
+
+/* ============================ preseason appearances ============================ */
+
+const preseason = (id: string, name: string, appearances: number, goals = 0): Player => ({
+  ...mkPlayer(id, name),
+  startingTotals: { appearances, ...(goals ? { goals } : {}) },
+});
+
+describe('preseason appearances', () => {
+  const roster = [preseason('peter', 'Peter', 4, 3), preseason('katie', 'Katie', 3, 1), preseason('george', 'George', 1), mkPlayer('tom', 'Tom')];
+  const st = startingTotalsOf(roster);
+
+  it('count as appearances, with goals per game from the preseason pair — and NO results', () => {
+    const s = statsFor(computeStats([], { startingTotals: st }), 'peter');
+    expect(s).toMatchObject({ totalAppearances: 4, startingAppearances: 4, appearances: 0, goals: 3, wins: 0, draws: 0, losses: 0, winPct: 0 });
+    expect(s.goalsPerGame).toBe(0.75); // 3 goals in 4 games
+    expect(computeStats([], { startingTotals: st }).has('george')).toBe(true); // appearances alone are enough to exist
+    expect(computeStats([], { startingTotals: st }).has('tom')).toBe(false);
+  });
+
+  it('keep win rate and W/D/L on recorded matches only', () => {
+    const m = mkMatch({ a: ['peter', 'tom'], b: ['katie', 'george'], score: [2, 0], events: [goal('a', 'peter'), goal('a', 'tom')] });
+    const peter = statsFor(computeStats([m], { startingTotals: st }), 'peter');
+    expect(peter.appearances).toBe(1); // recorded
+    expect(peter.totalAppearances).toBe(5); // 4 preseason + 1 recorded
+    expect(peter.winPct).toBe(100); // 1 win / 1 RECORDED game — not 1/5
+    expect([peter.wins, peter.draws, peter.losses]).toEqual([1, 0, 0]);
+    expect(peter.goalsPerGame).toBe(0.8); // (3 + 1) goals / 5 games
+    const katie = statsFor(computeStats([m], { startingTotals: st }), 'katie');
+    expect([katie.wins, katie.losses, katie.winPct]).toEqual([0, 1, 0]);
+    expect(katie.totalAppearances).toBe(4);
+  });
+
+  it('never let goals without a games count (or the reverse) distort an average', () => {
+    const lopsided: Player[] = [{ ...mkPlayer('a', 'A'), startingTotals: { goals: 5 } }];
+    const m = mkMatch({ a: ['a', 'x'], b: ['y', 'z'], score: [1, 0], events: [goal('a', 'a')] });
+    expect(statsFor(computeStats([m], { startingTotals: startingTotalsOf(lopsided) }), 'a').goalsPerGame).toBe(1); // 1 recorded goal / 1 recorded game
+  });
+
+  it('stay out of season and month views', () => {
+    const m = mkMatch({ date: '2026-11-02', a: ['peter'], b: ['tom'], score: [1, 0], events: [goal('a', 'peter')] });
+    const season = statsFor(computeStats([m], { startingTotals: st, period: { kind: 'season', id: '2026' } }), 'peter');
+    expect(season).toMatchObject({ totalAppearances: 1, goals: 1, startingAppearances: 0 });
+  });
+
+  it('rank on the appearances board by total games, but not on the win-rate board', () => {
+    const s = computeStats([], { startingTotals: st });
+    const apps = buildLeaderboard(s.values(), 'appearances', { minAppearances: 1 });
+    expect(apps.map((r) => [r.stats.playerId, r.value])).toEqual([['peter', 4], ['katie', 3], ['george', 1]]);
+    expect(buildLeaderboard(s.values(), 'winPct', { minAppearances: 1 })).toEqual([]); // no tracked results yet
+    const gpg = buildLeaderboard(s.values(), 'goalsPerGame', { minAppearances: 1 });
+    expect(gpg.map((r) => [r.stats.playerId, r.value])).toEqual([['katie', 1 / 3], ['peter', 0.75]].sort((x, y) => (y[1] as number) - (x[1] as number)));
+  });
+
+  it('never call a regular a debutant, and count preseason games towards appearance milestones', () => {
+    const m = mkMatch({ date: '2026-11-02', a: ['peter', 'tom'], b: ['katie', 'george'], score: [1, 0], events: [goal('a', 'peter')] });
+    const f = buildMatchFacts(m.id, [m], [...roster, mkPlayer('x', 'X')]);
+    const peter = f.players.find((p) => p.playerId === 'peter')!;
+    expect(peter.debut).toBe(false); // 4 preseason games already
+    expect(peter.careerAppearances).toBe(5);
+    expect(peter.milestones).toContain('5th appearance');
+    expect(f.players.find((p) => p.playerId === 'tom')!.debut).toBe(true); // genuinely new
+    expect(f.statements.join(' ')).not.toContain("Peter's first appearance");
+  });
+});
+
+describe('changing many players at once (restarting the numbers)', () => {
+  const setup = async () => {
+    const store = new MemoryStore();
+    await execute(store, planAddPlayers(await store.load(), { players: [{ name: 'Peter', startingTotals: { goals: 3 } }, { name: 'Dan W', startingTotals: { goals: 3 } }, { name: 'Antony' }, { name: 'Katie' }] }, ctx), ctx, true);
+    return store;
+  };
+
+  it('replaces every starting total in one atomic step, and can add an alias', async () => {
+    const store = await setup();
+    const plan = planUpdatePlayers(await store.load(), {
+      updates: [
+        { player: 'Peter', startingTotals: { appearances: 4, goals: 3 } },
+        { player: 'Dan W', startingTotals: { appearances: 3, goals: 2 } },
+        { player: 'Antony', startingTotals: { appearances: 4, goals: 1 }, addAliases: ['Ant'] },
+        { player: 'Katie', startingTotals: { appearances: 3, goals: 1 } },
+      ],
+      instruction: 'Restart preseason totals',
+    }, ctx);
+    expect(plan.ok, JSON.stringify(plan.errors)).toBe(true);
+    expect(plan.ops).toHaveLength(4);
+    await execute(store, plan, ctx, true);
+    const snap = await store.load();
+    const by = (id: string) => snap.players.find((p) => p.id === id)!;
+    expect(by('dan-w').startingTotals).toEqual({ appearances: 3, goals: 2 }); // 3 → 2: replaced, not added
+    expect(by('antony').aliases).toEqual(['Ant']);
+    expect(auditData(snap, ctx).problems).toEqual([]);
+    // "Ant" now resolves in a published result.
+    const m = planPublishMatch(snap, { date: '2026-11-02', teams: { a: { name: 'A', players: ['Ant', 'Peter'] }, b: { name: 'B', players: ['Dan', 'Katie'] } }, score: { a: 0, b: 0 } }, ctx);
+    expect(m.ok, JSON.stringify([m.errors, m.clarifications])).toBe(true);
+  });
+
+  it('is all-or-nothing: an unknown name or a repeated player writes nothing', async () => {
+    const store = await setup();
+    const before = JSON.stringify((await store.load()).players);
+    const unknown = planUpdatePlayers(await store.load(), { updates: [{ player: 'Peter', startingTotals: { appearances: 4 } }, { player: 'Zinedine', startingTotals: { appearances: 1 } }] }, ctx);
+    expect(unknown.status).toBe('needs-clarification');
+    await execute(store, unknown, ctx, true);
+    const dup = planUpdatePlayers(await store.load(), { updates: [{ player: 'Peter', startingTotals: { appearances: 4 } }, { player: 'peter', startingTotals: { appearances: 5 } }] }, ctx);
+    expect(dup.errors.map((e) => e.code)).toContain('DUPLICATE_UPDATE');
+    await execute(store, dup, ctx, true);
+    expect(JSON.stringify((await store.load()).players)).toBe(before);
+  });
+
+  it('skips players who are already up to date instead of failing', async () => {
+    const store = await setup();
+    const plan = planUpdatePlayers(await store.load(), { updates: [{ player: 'Peter', startingTotals: { goals: 3 } }, { player: 'Katie', startingTotals: { appearances: 3 } }] }, ctx);
+    expect(plan.ok).toBe(true);
+    expect(plan.details.skipped[0]).toContain('Peter');
+    expect(plan.ops).toHaveLength(1);
+  });
+});
+
+describe('what the site shows for preseason-only players', () => {
+  const roster = [preseason('peter', 'Peter', 4, 3), preseason('george', 'George', 1), mkPlayer('katie', 'Katie')];
+  const idx = getIndex({ ...EMPTY_DATA, players: roster });
+  const text = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+
+  it('profile: appearances and goals, labelled preseason, and NO win rate', () => {
+    const t = text(renderToStaticMarkup(<PlayerProfile idx={idx} playerId="peter" />));
+    expect(t).toMatch(/Appearances\s*4/);
+    expect(t).toContain('preseason');
+    expect(t).toMatch(/Goals \/ game\s*0\.75/);
+    expect(t).not.toContain('Win rate');
+    expect(t).not.toContain('Draws');
+    const g = text(renderToStaticMarkup(<PlayerProfile idx={idx} playerId="george" />));
+    expect(g).toMatch(/Appearances\s*1/);
+    expect(g).not.toContain('Yet to make an appearance');
+  });
+
+  it('squad: total appearances, dash instead of a fake 0% win rate', () => {
+    const html = renderToStaticMarkup(<PlayersDirectory idx={idx} />);
+    expect(html).not.toContain('0%');
+    expect(text(html)).toMatch(/Peter[\s\S]*?4 Apps 3 Goals/);
+  });
+
+  it('leaderboard: shows total apps and dashes for tracked-only columns', () => {
+    const t = text(renderToStaticMarkup(<LeaderboardView idx={idx} initial={{ board: 'appearances' }} />));
+    expect(t).toContain('Peter');
+    expect(t).toContain('George');
+    expect(t).toContain('–');
+    expect(t).not.toContain('0%');
   });
 });

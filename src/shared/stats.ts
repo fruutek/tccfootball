@@ -32,11 +32,18 @@ export interface PlayerMatchEntry {
 
 export interface PlayerStats {
   playerId: string;
+  /**
+   * Appearances in RECORDED matches. This is the denominator for wins, draws, losses and win %,
+   * so preseason games (which have no recorded result) never dilute them.
+   */
   appearances: number;
-  /** All-time goals INCLUDE `startingGoals`. Per-game rates use recorded matches only. */
+  /** Everything counts: recorded appearances + preseason games. This is the "Apps" figure people see. */
+  totalAppearances: number;
+  /** All-time goals INCLUDE `startingGoals`. */
   goals: number;
   assists: number;
-  /** Goals / assists carried over from before match records began (all-time view only). */
+  /** Carried over from before match records began (all-time view only). */
+  startingAppearances: number;
   startingGoals: number;
   startingAssists: number;
   ownGoals: number;
@@ -61,6 +68,7 @@ export interface PlayerStats {
 }
 
 export interface StartingTotals {
+  appearances?: number | undefined;
   goals?: number | undefined;
   assists?: number | undefined;
 }
@@ -100,8 +108,10 @@ export function emptyStats(playerId: string): PlayerStats {
   return {
     playerId,
     appearances: 0,
+    totalAppearances: 0,
     goals: 0,
     assists: 0,
+    startingAppearances: 0,
     startingGoals: 0,
     startingAssists: 0,
     ownGoals: 0,
@@ -173,6 +183,7 @@ export function computeStats(matches: readonly Match[], opts: StatsOptions = {})
         else s.losses++;
       }
     }
+    s.totalAppearances = s.appearances;
     s.currentWinStreak = streak;
     s.goalContributions = s.goals + s.assists;
     s.winPct = (s.wins / s.appearances) * 100;
@@ -185,20 +196,31 @@ export function computeStats(matches: readonly Match[], opts: StatsOptions = {})
     out.set(playerId, s);
   }
 
-  // Starting totals join the ALL-TIME view only. They are added after the per-game rates above were
-  // computed, so goals-per-game keeps meaning "goals in recorded matches ÷ recorded appearances".
+  // Starting (preseason) totals join the ALL-TIME view only: their dates are unknown.
+  //  • appearances/goals/assists add to the headline totals;
+  //  • wins, draws, losses and win % stay RECORDED-matches-only — preseason has no tracked results;
+  //  • per-game rates divide goals by games ONLY when the totals came as a pair, so goals recorded
+  //    without games (or vice-versa) can never inflate or dilute an average.
   const allTime = (opts.period?.kind ?? 'all') === 'all';
   if (allTime && opts.startingTotals) {
     for (const [playerId, st] of opts.startingTotals) {
+      const n = st.appearances ?? 0;
       const g = st.goals ?? 0;
       const a = st.assists ?? 0;
-      if (g === 0 && a === 0) continue;
+      if (n === 0 && g === 0 && a === 0) continue;
       const s = out.get(playerId) ?? emptyStats(playerId);
+      const recordedGoals = s.goals;
+      const recordedAssists = s.assists;
+      s.startingAppearances = n;
       s.startingGoals = g;
       s.startingAssists = a;
+      s.totalAppearances = s.appearances + n;
       s.goals += g;
       s.assists += a;
       s.goalContributions = s.goals + s.assists;
+      const games = s.totalAppearances;
+      s.goalsPerGame = games ? (recordedGoals + (n > 0 ? g : 0)) / games : 0;
+      s.assistsPerGame = games ? (recordedAssists + (n > 0 ? a : 0)) / games : 0;
       out.set(playerId, s);
     }
   }

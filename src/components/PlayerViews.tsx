@@ -20,7 +20,7 @@ export function PlayerCard({ p, s, i = 0 }: { p: Player; s: PlayerStats; i?: num
         <FormStrip form={s.form} small />
       </div>
       <div className="pcard__stats num">
-        <div className="pcard__stat"><b>{s.appearances}</b><span>Apps</span></div>
+        <div className="pcard__stat"><b>{s.totalAppearances}</b><span>Apps</span></div>
         <div className="pcard__stat"><b>{s.goals}</b><span>Goals</span></div>
         <div className="pcard__stat"><b>{s.assists}</b><span>Assists</span></div>
         <div className="pcard__stat"><b>{s.appearances ? pct(s.winPct) : '—'}</b><span>Win</span></div>
@@ -36,12 +36,12 @@ export function PlayersDirectory({ idx }: { idx: Index }) {
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return idx.data.players
-      .filter((p) => p.status === 'active' || (all.get(p.id)?.appearances ?? 0) > 0)
+      .filter((p) => p.status === 'active' || (all.get(p.id)?.totalAppearances ?? 0) > 0)
       .filter((p) => !needle || [p.displayName, p.nickname ?? ''].some((n) => n.toLowerCase().includes(needle)))
       .sort((a, b) => {
         const sa = statsFor(all, a.id);
         const sb = statsFor(all, b.id);
-        const by = { name: 0, apps: sb.appearances - sa.appearances, goals: sb.goals - sa.goals, assists: sb.assists - sa.assists }[sort];
+        const by = { name: 0, apps: sb.totalAppearances - sa.totalAppearances, goals: sb.goals - sa.goals, assists: sb.assists - sa.assists }[sort];
         return by || a.displayName.localeCompare(b.displayName);
       });
   }, [idx, q, sort, all]);
@@ -136,29 +136,34 @@ export function PlayerProfile({ idx, playerId }: { idx: Index; playerId: string 
         </div>
       </header>
 
-      {s.appearances === 0 && s.startingGoals + s.startingAssists === 0 ? (
+      {s.totalAppearances === 0 && s.startingGoals + s.startingAssists === 0 ? (
         <Empty title="Yet to make an appearance">Stats appear here as soon as {p.displayName} plays a recorded match.</Empty>
       ) : (
         <>
           <section>
             <SectionHead title="Career" />
             <div className="tiles num">
-              <Tile label="Appearances" value={s.appearances} />
+              <Tile label="Appearances" value={s.totalAppearances} {...(s.startingAppearances > 0 ? { sub: s.appearances > 0 ? `${s.startingAppearances} preseason + ${s.appearances} recorded` : 'preseason, before match records' } : {})} />
               <Tile label="Goals" value={s.goals} hot {...(s.startingGoals > 0 ? { sub: `incl. ${s.startingGoals} before match records` } : {})} />
               <Tile label="Assists" value={s.assists} {...(s.startingAssists > 0 ? { sub: `incl. ${s.startingAssists} before match records` } : {})} />
-              <Tile label="Win rate" value={pct(s.winPct)} sub={`${s.wins} wins`} hot />
-              <Tile label="Player of match" value={s.potm} />
               <Tile label="Goals / game" value={s.goalsPerGame.toFixed(2)} />
-              <Tile label="Assists / game" value={s.assistsPerGame.toFixed(2)} />
-              <Tile label="Win streak" value={s.currentWinStreak} sub={`best ${s.longestWinStreak}`} />
-              <Tile label="Draws" value={s.draws} />
-              <Tile label="Losses" value={s.losses} />
+              {/* Results are only tracked for recorded matches — never show a 0% win rate for someone with none. */}
+              {s.appearances > 0 && (
+                <>
+                  <Tile label="Win rate" value={pct(s.winPct)} sub={`${s.wins} wins`} hot />
+                  <Tile label="Player of match" value={s.potm} />
+                  <Tile label="Assists / game" value={s.assistsPerGame.toFixed(2)} />
+                  <Tile label="Win streak" value={s.currentWinStreak} sub={`best ${s.longestWinStreak}`} />
+                  <Tile label="Draws" value={s.draws} />
+                  <Tile label="Losses" value={s.losses} />
+                </>
+              )}
             </div>
           </section>
 
           {s.appearances === 0 && (
             <p className="note">
-              These totals were recorded before match records began, so there is no match-by-match history yet. Wins, form and averages start with the first recorded game.
+              These totals come from before match records began (preseason), so there is no match-by-match history or win rate yet — those start with the first recorded game.
             </p>
           )}
 

@@ -46,9 +46,10 @@ export function auditData(snap: Snapshot, ctx: Ctx): IntegrityReport {
 
   const withStarting = snap.players.filter((p) => p.startingTotals);
   if (withStarting.length) {
-    const g = withStarting.reduce((n, p) => n + (p.startingTotals?.goals ?? 0), 0);
-    const a = withStarting.reduce((n, p) => n + (p.startingTotals?.assists ?? 0), 0);
-    notes.push(`${withStarting.length} player(s) carry starting totals from before match records began (${g} goals, ${a} assists). They count in all-time totals only. If those matches are ever recorded, clear the starting totals to avoid counting them twice.`);
+    const n = withStarting.reduce((t, p) => t + (p.startingTotals?.appearances ?? 0), 0);
+    const g = withStarting.reduce((t, p) => t + (p.startingTotals?.goals ?? 0), 0);
+    const a = withStarting.reduce((t, p) => t + (p.startingTotals?.assists ?? 0), 0);
+    notes.push(`${withStarting.length} player(s) carry preseason totals from before match records began (${n} appearances, ${g} goals, ${a} assists). They count in all-time totals only and never in win rates. If those matches are ever recorded, clear the preseason totals to avoid counting them twice.`);
   }
 
   /* matches */

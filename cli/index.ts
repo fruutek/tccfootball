@@ -23,7 +23,7 @@ import { execute } from './services/execute';
 import { auditData } from './services/integrity';
 import { describeMatch, nameLookup, settingsOrDefault } from './services/common';
 import { planEditMatch, planMatchStatus, planPublishMatch } from './services/matches';
-import { planAddPlayer, planAddPlayers, planUpdatePlayer } from './services/players';
+import { planAddPlayer, planAddPlayers, planUpdatePlayer, planUpdatePlayers } from './services/players';
 import { planClearFixture, planSetFixture, planSetSettings, SETTINGS_KEYS } from './services/settings';
 import { matchToSpec } from './spec';
 import type { Ctx, Outcome, Plan } from './types';
@@ -50,9 +50,10 @@ WRITE  (add --apply to commit)
   match edit <id> (--file F | --stdin)        correct a published result
   match unpublish|republish|delete <id>
   player add --name "Full Name" [--nickname N] [--alias A]... [--bio TEXT] [--starting-goals N] [--starting-assists N]
+  player update-many (--file F | --stdin)     change many players at once: {"updates":[{"player":"Peter","startingTotals":{"appearances":4,"goals":3}}, …]}
   player add-many (--file F | --stdin)        a whole roster at once: {"players":[{"name":"Peter","startingTotals":{"goals":3}}, …]}
   player update <name> [--display-name N] [--nickname N|--clear-nickname] [--add-alias A] [--remove-alias A]
-                       [--bio T|--clear-bio] [--starting-goals N] [--starting-assists N] [--clear-starting-totals] [--photo FILE|--photo-path /photos/x.webp|--remove-photo] [--archive|--unarchive]
+                       [--bio T|--clear-bio] [--starting-appearances N] [--starting-goals N] [--starting-assists N] [--clear-starting-totals] [--photo FILE|--photo-path /photos/x.webp|--remove-photo] [--archive|--unarchive]
   photo prepare <player-id> <image-file>      optimise a photo into public/photos/ (needs no database access)
   article publish (--file F | --stdin)        publish an article (category, title, standfirst, body …)
   article edit    (--file F | --stdin)        update an existing article (spec.slug required)
@@ -96,6 +97,7 @@ const { values: flags, positionals } = parseArgs({
     'clear-bio': { type: 'boolean' },
     photo: { type: 'string' },
     'photo-path': { type: 'string' },
+    'starting-appearances': { type: 'string' },
     'starting-goals': { type: 'string' },
     'starting-assists': { type: 'string' },
     'clear-starting-totals': { type: 'boolean' },
@@ -195,7 +197,7 @@ async function main(): Promise<number> {
           .sort((a, b) => a.displayName.localeCompare(b.displayName))
           .map((p) => {
             const s = statsFor(stats, p.id);
-            return [p.id, p.displayName + (p.fictional ? ' [DEMO]' : ''), p.nickname ?? '', String(s.appearances), String(s.goals), String(s.assists), p.status];
+            return [p.id, p.displayName + (p.fictional ? ' [DEMO]' : ''), p.nickname ?? '', String(s.totalAppearances), String(s.goals), String(s.assists), p.status];
           });
         emit(rows.length ? table(rows, ['id', 'name', 'nickname', 'apps', 'goals', 'assists', 'status']) : '(no players yet — add one with "player add --name …")');
         return 0;
@@ -218,8 +220,8 @@ async function main(): Promise<number> {
               ...(flags['nickname'] ? { nickname: String(flags['nickname']) } : {}),
               ...(flags['alias'] ? { aliases: flags['alias'] as string[] } : {}),
               ...(flags['bio'] ? { bio: String(flags['bio']) } : {}),
-              ...(flags['starting-goals'] || flags['starting-assists']
-                ? { startingTotals: { ...(flags['starting-goals'] ? { goals: Number(flags['starting-goals']) } : {}), ...(flags['starting-assists'] ? { assists: Number(flags['starting-assists']) } : {}) } }
+              ...(flags['starting-appearances'] || flags['starting-goals'] || flags['starting-assists']
+                ? { startingTotals: { ...(flags['starting-appearances'] ? { appearances: Number(flags['starting-appearances']) } : {}), ...(flags['starting-goals'] ? { goals: Number(flags['starting-goals']) } : {}), ...(flags['starting-assists'] ? { assists: Number(flags['starting-assists']) } : {}) } }
                 : {}),
               ...(flags['fictional'] ? { fictional: true } : {}),
               ...(flags['instruction'] ? { instruction: String(flags['instruction']) } : {}),
@@ -228,6 +230,7 @@ async function main(): Promise<number> {
         return finish(planAddPlayer(snap, body, ctx));
       }
       if (action === 'add-many') return finish(planAddPlayers(snap, readInput(), ctx));
+      if (action === 'update-many') return finish(planUpdatePlayers(snap, readInput(), ctx));
       if (action === 'update') {
         const ref = arg();
         const patch: Record<string, unknown> = {};
@@ -238,8 +241,9 @@ async function main(): Promise<number> {
         if (flags['remove-alias']) patch['removeAliases'] = flags['remove-alias'];
         if (flags['bio']) patch['bio'] = String(flags['bio']);
         if (flags['clear-bio']) patch['bio'] = null;
-        if (flags['starting-goals'] || flags['starting-assists']) {
+        if (flags['starting-appearances'] || flags['starting-goals'] || flags['starting-assists']) {
           patch['startingTotals'] = {
+            ...(flags['starting-appearances'] ? { appearances: Number(flags['starting-appearances']) } : {}),
             ...(flags['starting-goals'] ? { goals: Number(flags['starting-goals']) } : {}),
             ...(flags['starting-assists'] ? { assists: Number(flags['starting-assists']) } : {}),
           };

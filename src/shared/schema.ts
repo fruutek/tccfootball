@@ -54,6 +54,8 @@ export const playerSchema = z
      */
     startingTotals: z
       .object({
+        /** Games played before match records began (preseason). Counted as appearances, but with no results. */
+        appearances: z.number().int().min(0).max(999).optional(),
         goals: z.number().int().min(0).max(999).optional(),
         assists: z.number().int().min(0).max(999).optional(),
       })

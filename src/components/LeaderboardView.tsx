@@ -6,18 +6,19 @@ import { parsePeriod, periodKey, seasonLabel, type Period } from '../shared/seas
 import type { PlayerStats } from '../shared/stats';
 import { Avatar, Empty, IconTable } from './ui';
 
-type Col = { key: string; label: string; opt?: boolean; get: (s: PlayerStats) => number; fmt: (n: number) => string };
+/** `tracked`: only meaningful for RECORDED matches — shown as "–" for players with none (e.g. preseason only). */
+type Col = { key: string; label: string; opt?: boolean; tracked?: boolean; get: (s: PlayerStats) => number; fmt: (n: number) => string };
 const COLS: Col[] = [
-  { key: 'appearances', label: 'Apps', get: (s) => s.appearances, fmt: String },
+  { key: 'appearances', label: 'Apps', get: (s) => s.totalAppearances, fmt: String },
   { key: 'goals', label: 'Goals', get: (s) => s.goals, fmt: String },
   { key: 'assists', label: 'Assists', get: (s) => s.assists, fmt: String },
-  { key: 'wins', label: 'W', opt: true, get: (s) => s.wins, fmt: String },
-  { key: 'draws', label: 'D', opt: true, get: (s) => s.draws, fmt: String },
-  { key: 'losses', label: 'L', opt: true, get: (s) => s.losses, fmt: String },
-  { key: 'winPct', label: 'Win %', get: (s) => s.winPct, fmt: pct },
+  { key: 'wins', label: 'W', opt: true, tracked: true, get: (s) => s.wins, fmt: String },
+  { key: 'draws', label: 'D', opt: true, tracked: true, get: (s) => s.draws, fmt: String },
+  { key: 'losses', label: 'L', opt: true, tracked: true, get: (s) => s.losses, fmt: String },
+  { key: 'winPct', label: 'Win %', tracked: true, get: (s) => s.winPct, fmt: pct },
   { key: 'goalsPerGame', label: 'G/Gm', opt: true, get: (s) => s.goalsPerGame, fmt: (n) => n.toFixed(2) },
-  { key: 'potm', label: 'POTM', opt: true, get: (s) => s.potm, fmt: String },
-  { key: 'winStreak', label: 'Streak', opt: true, get: (s) => s.currentWinStreak, fmt: String },
+  { key: 'potm', label: 'POTM', opt: true, tracked: true, get: (s) => s.potm, fmt: String },
+  { key: 'winStreak', label: 'Streak', opt: true, tracked: true, get: (s) => s.currentWinStreak, fmt: String },
 ];
 const BOARD_COL: Record<LeaderboardKey, string> = {
   goals: 'goals', assists: 'assists', appearances: 'appearances', wins: 'wins', winPct: 'winPct', goalsPerGame: 'goalsPerGame', potm: 'potm', winStreak: 'winStreak',
@@ -168,7 +169,7 @@ export function LeaderboardView({ idx, initial }: { idx: Index; initial?: { boar
                     </td>
                     {COLS.map((c) => (
                       <td key={c.key} className={`${c.key === BOARD_COL[board] ? 'key' : ''} ${c.opt && c.key !== BOARD_COL[board] ? 'opt' : ''}`}>
-                        {c.fmt(c.get(r.stats))}
+                        {c.tracked && r.stats.appearances === 0 ? '–' : c.fmt(c.get(r.stats))}
                       </td>
                     ))}
                   </tr>
