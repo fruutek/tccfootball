@@ -76,7 +76,8 @@ export const teamSchema = z
   .object({
     name: text(30),
     colour,
-    playerIds: z.array(id).min(1).max(20),
+    /** Empty only for a preseason result (line-ups were never recorded). `validateMatchContent` enforces ≥ 1 otherwise. */
+    playerIds: z.array(id).max(20),
   })
   .strict();
 export type MatchTeam = z.infer<typeof teamSchema>;
@@ -128,6 +129,12 @@ export const matchSchema = z
       .strict(),
     events: z.array(matchEventSchema).max(120),
     playerOfTheMatch: id.nullable(),
+    /**
+     * A preseason RESULT: date, score and scorers only. Line-ups were never recorded, so it is shown on
+     * the Results and match pages but counts towards NO statistic — those games live in each player's
+     * `startingTotals` instead. Scorers carry their team explicitly on each goal event.
+     */
+    preseason: z.literal(true).optional(),
     /** DERIVED index of every participant, sorted. Verified by `stats audit`. */
     playerIds: z.array(id),
     /** Content hash used to refuse accidental duplicate publishing. */

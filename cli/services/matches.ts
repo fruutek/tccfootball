@@ -82,6 +82,7 @@ function buildMatchDoc(
     score: content.score,
     events: content.events,
     playerOfTheMatch: content.playerOfTheMatch,
+    ...(content.preseason ? { preseason: true as const } : {}),
     playerIds: participantIds(content),
     fingerprint: fingerprintOf(content),
     ...(fictional ? { fictional: true as const } : {}),
@@ -239,14 +240,18 @@ export function planPublishMatch(snap: Snapshot, input: unknown, ctx: Ctx): Plan
   plan.details.statChanges = statChanges(snap.matches, after, snap.players);
   plan.details.statChangeLines = plan.details.statChanges.map(formatStatChange);
   const sm = settingsOrDefault(snap.settings).seasonStartMonth;
-  const facts = buildMatchFacts(id, after, snap.players, { seasonStartMonth: sm });
+  // A preseason result has no line-ups, so there is nothing to build a fact sheet or report from.
+  const facts = match.preseason ? null : buildMatchFacts(id, after, snap.players, { seasonStartMonth: sm });
   plan.details.facts = facts;
 
-  plan.ops.push(op('matches', id, 'create', null, match, `Published ${describeMatch(match)}`));
+  plan.ops.push(op('matches', id, 'create', null, match, `Published ${match.preseason ? 'preseason result ' : ''}${describeMatch(match)}`));
   if (spec.report) {
-    const reportOp = planReport(snap, match, spec, facts, plan, ctx);
-    if (reportOp) plan.ops.push(reportOp);
-  } else {
+    if (!facts) plan.errors.push(err('PRESEASON_NO_REPORT', 'A preseason result has no line-ups, so there are no facts to write a match report from.'));
+    else {
+      const reportOp = planReport(snap, match, spec, facts, plan, ctx);
+      if (reportOp) plan.ops.push(reportOp);
+    }
+  } else if (!match.preseason) {
     plan.warnings.push(warn('NO_REPORT', 'No match report included. Write one from the fact sheet and add it as "report" (title, standfirst, body), or publish without one.'));
   }
 
@@ -256,7 +261,7 @@ export function planPublishMatch(snap: Snapshot, input: unknown, ctx: Ctx): Plan
     plan.details.fixtureCleared = true;
     plan.ops.push(op('settings', 'site', 'update', snap.settings, { ...snap.settings, nextFixture: null, updatedAt: ctx.now.toISOString() }, `Cleared next fixture (${nf.date}) — it has been played`));
   }
-  plan.summary = `Publish ${describeMatch(match)}${spec.report ? ' with match report' : ''}`;
+  plan.summary = `Publish ${match.preseason ? 'preseason result ' : ''}${describeMatch(match)}${spec.report ? ' with match report' : ''}`;
   return seal(plan);
 }
 
@@ -293,6 +298,7 @@ export function planEditMatch(snap: Snapshot, matchId: string, input: unknown, c
   }
   if (JSON.stringify(existing.events) !== JSON.stringify(match.events)) changes.push('goals / assists changed');
   if (existing.playerOfTheMatch !== match.playerOfTheMatch) changes.push(`player of the match ${existing.playerOfTheMatch ?? 'none'} → ${match.playerOfTheMatch ?? 'none'}`);
+  if (Boolean(existing.preseason) !== Boolean(match.preseason)) changes.push(match.preseason ? 'now a preseason result (no line-ups, no statistics)' : 'no longer a preseason result (now counts towards statistics)');
   if ((existing.venue ?? '') !== (match.venue ?? '')) changes.push('venue changed');
   if ((existing.kickoff ?? '') !== (match.kickoff ?? '')) changes.push('kick-off time changed');
   plan.details.changes = changes;
@@ -318,13 +324,16 @@ export function planEditMatch(snap: Snapshot, matchId: string, input: unknown, c
 
   const reports = linkedReports(snap, matchId);
   plan.details.linkedArticles = reports.map((a) => ({ slug: a.id, title: a.title, status: a.status }));
-  if (match.status === 'published') {
+  if (match.status === 'published' && !match.preseason) {
     const facts = buildMatchFacts(matchId, after, snap.players, { seasonStartMonth: settingsOrDefault(snap.settings).seasonStartMonth });
     plan.details.facts = facts;
     if (spec.report) {
       const reportOp = planReport(snap, match, spec, facts, plan, ctx);
       if (reportOp) plan.ops.push(reportOp);
     }
+  } else if (match.preseason && spec.report) {
+    plan.errors.push(err('PRESEASON_NO_REPORT', 'A preseason result has no line-ups, so there are no facts to write a match report from.'));
+    return seal(plan);
   }
   const factual = existing.fingerprint !== match.fingerprint || existing.playerOfTheMatch !== match.playerOfTheMatch;
   if (factual && reports.length && !spec.report) {

@@ -235,7 +235,7 @@ export function MatchCentre({ idx, matchId }: { idx: Index; matchId: string | nu
       </nav>
 
       <div role="tablist" className="tabs" aria-label="Match sections">
-        {(['summary', 'lineups', 'report'] as const).map((t) => (
+        {(['summary', 'lineups', 'report'] as const).filter((t) => !(m.preseason && t === 'lineups')).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
             {t === 'lineups' ? 'Line-ups' : t === 'summary' ? 'Summary' : 'Report'}
           </button>
@@ -268,13 +268,15 @@ export function MatchCentre({ idx, matchId }: { idx: Index; matchId: string | nu
           )}
         </section>
 
-        <section data-pane className={tab === 'lineups' ? 'on' : ''}>
-          <SectionHead title="Starting line-ups" />
-          <div className="stack-sm">
-            <Lineup m={m} team="a" idx={idx} />
-            <Lineup m={m} team="b" idx={idx} />
-          </div>
-        </section>
+        {!m.preseason && (
+          <section data-pane className={tab === 'lineups' ? 'on' : ''}>
+            <SectionHead title="Starting line-ups" />
+            <div className="stack-sm">
+              <Lineup m={m} team="a" idx={idx} />
+              <Lineup m={m} team="b" idx={idx} />
+            </div>
+          </section>
+        )}
 
         <section data-pane className={`span2 ${tab === 'report' ? 'on' : ''}`}>
           <SectionHead title="Match report" href={report ? `/news/${report.id}` : undefined} linkLabel="Open in News" />

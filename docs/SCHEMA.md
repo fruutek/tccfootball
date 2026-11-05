@@ -68,12 +68,20 @@ match history, player-of-the-match awards.
     { "type": "assist", "team": "a", "playerId": "adam" }                       // assist not tied to a specific goal
   ],
   "playerOfTheMatch": "peter",        // or null
+  "preseason": true,                  // only on a results-only preseason game (below)
   "playerIds": ["adam","alex", …],    // DERIVED, sorted index of everyone who played
   "fingerprint": "9f2c…",             // sha-256 of the match content (duplicate guard)
   "fictional": true,                  // demo data only
   "revision": 1, "createdAt": "…", "updatedAt": "…"
 }
 ```
+
+**Preseason results (`"preseason": true`).** Date, score and scorers only: the line-ups were never recorded, so both teams have an empty
+`playerIds`, every goal event states its `team` explicitly, and there is no player of the match or report. They appear on the Results,
+home and match pages (tagged "Preseason", no line-ups tab) but are **excluded from every statistic** (`matchesForPeriod` skips them): the
+same games are already carried by each player's `startingTotals`, so nothing is counted twice. `stats audit` cross-checks the scorers in
+the preseason results against the preseason goals on the profiles. When real line-ups for a game are known, record it as a normal match
+and clear the matching starting totals.
 
 **Team names and colours are per fixture** — `Red Team`, `Bibs`, `Whites`… A colour is a name
 (`red blue green yellow orange purple pink teal white black grey`) or `#rrggbb`.
@@ -91,9 +99,9 @@ match history, player-of-the-match awards.
 | Rule | Code |
 |---|---|
 | For each team: named goals + unknown-scorer goals + opposition own goals **=** the declared score | `GOALS_UNACCOUNTED` / `GOALS_EXCEED_SCORE` |
-| Scorers belong to the team credited; own-goal scorers to the *other* team | `SCORER_NOT_IN_TEAM`, `OWN_GOAL_WRONG_TEAM` |
+| Scorers belong to the team credited; own-goal scorers to the *other* team (not checked for a preseason result, which has no line-ups) | `SCORER_NOT_IN_TEAM`, `OWN_GOAL_WRONG_TEAM` |
 | Assists ≤ non-own goals per team; no self-assists; assister on the scoring team | `ASSISTS_EXCEED_GOALS`, `ASSIST_SELF`, `ASSIST_NOT_IN_TEAM` |
-| A player appears once, on one team; both teams non-empty and differently named | `PLAYER_ON_BOTH_TEAMS`, `TEAM_EMPTY`, `TEAM_NAME_DUPLICATE` |
+| A player appears once, on one team; both teams non-empty and differently named. A preseason result is the reverse: no line-ups and no player of the match | `PLAYER_ON_BOTH_TEAMS`, `TEAM_EMPTY`, `TEAM_NAME_DUPLICATE`, `PRESEASON_HAS_LINEUP`, `PRESEASON_NO_POTM` |
 | Player of the match played in the match | `POTM_NOT_PARTICIPANT` |
 | Real date, not in the future (non-Monday → warning) | `DATE_INVALID`, `DATE_FUTURE` |
 | No same-date match; no identical result under any date/labelling | `MATCH_EXISTS`, `DUPLICATE_RESULT` |
@@ -141,7 +149,7 @@ Computed in [`src/shared/stats.ts`](../src/shared/stats.ts) from published match
 
 | Statistic | Definition |
 |---|---|
-| Appearances | Matches whose line-up includes the player (**+ preseason games** in the all-time "Apps" figure; win/draw/loss figures use recorded matches only) |
+| Appearances | Recorded matches (not preseason results) whose line-up includes the player (**+ preseason games** in the all-time "Apps" figure; win/draw/loss figures use recorded matches only) |
 | Goals | `goal` events with the player as scorer (own goals and unknown scorers excluded), **plus `startingTotals.goals` in the all-time view** |
 | Assists | `goal.assistId` links + `assist` events |
 | Own goals | `own_goal` events by the player (tracked, not counted as goals) |

@@ -11,7 +11,8 @@ import { TEAM_KEYS } from './constants';
  */
 export function canonicalContent(m: MatchContent, opts: { includeDate: boolean }): string {
   const sides = TEAM_KEYS.map((k) => ({ key: k, players: [...m.teams[k].playerIds].sort(), score: m.score[k] }));
-  sides.sort((x, y) => x.players.join(',').localeCompare(y.players.join(',')));
+  // Score breaks the tie when line-ups are identical (both empty in a preseason result).
+  sides.sort((x, y) => x.players.join(',').localeCompare(y.players.join(',')) || x.score - y.score);
   const index = new Map(sides.map((s, i) => [s.key, i]));
 
   const events = m.events

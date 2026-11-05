@@ -107,7 +107,13 @@ There are two ways to run any `mnf` command. **Everywhere these docs and skills 
     `player add|update --starting-appearances N --starting-goals N`. They never create results: win rates and W/D/L use recorded matches only.
     Never use them to record a match, never invent them, and tell the owner they count in all-time totals only. If the owner later records the
     matches behind them, clear the starting totals so nothing is double-counted.
-12. Keep `fictional` data out of real data: don't `demo seed` on a project with real matches (the CLI refuses).
+12. **Preseason results** (games from before line-ups were recorded). When the owner gives a score and scorers for a past game but not who played,
+    publish it as a results-only entry so it shows on the Results page: `"preseason": true`, teams with **names only** (no `players`), and every goal
+    with an explicit `"team"` (`{"type":"goal","player":"Peter","team":"a"}`; unknown scorer `"player": null`). It counts towards **no** statistic — the
+    players' preseason totals (rule 11) already cover those games — so never also add its goals anywhere else. It needs a real date for every game: ask if
+    only some were given. No player of the match, no report, no line-ups (the CLI refuses them). `stats audit` warns if the scorers disagree with the
+    preseason goals on the profiles.
+13. Keep `fictional` data out of real data: don't `demo seed` on a project with real matches (the CLI refuses).
 
 ## Turning English into a spec
 
