@@ -92,7 +92,8 @@ export function auditData(snap: Snapshot, ctx: Ctx): IntegrityReport {
   }
 
   /* statistics cross-checks */
-  const published = snap.matches.filter((m) => m.status === 'published');
+  // Preseason results carry no line-ups and count towards no statistic, so they are checked on their own below.
+  const published = snap.matches.filter((m) => m.status === 'published' && !m.preseason);
   const stats = computeStats(published);
   let goals = 0, assists = 0, apps = 0;
   for (const s of stats.values()) {
@@ -113,6 +114,21 @@ export function auditData(snap: Snapshot, ctx: Ctx): IntegrityReport {
   const own = published.reduce((n, m) => n + m.events.filter((e) => e.type === 'own_goal').length, 0);
   if (declared !== expectedGoals + unknown + own) bad('STATS_SCORE_SUM', `Total goals in scores (${declared}) ≠ named (${expectedGoals}) + unknown (${unknown}) + own goals (${own}).`);
   if (unknown) notes.push(`${unknown} goal(s) across all matches have an unknown scorer and are not credited to anyone.`);
+
+  /* preseason results vs the preseason totals typed on the players */
+  const preseasonGames = snap.matches.filter((m) => m.status === 'published' && m.preseason);
+  if (preseasonGames.length) {
+    const fromResults = new Map<string, number>();
+    for (const m of preseasonGames) for (const e of m.events) if (e.type === 'goal' && e.playerId) fromResults.set(e.playerId, (fromResults.get(e.playerId) ?? 0) + 1);
+    const odd = [...new Set([...fromResults.keys(), ...snap.players.filter((p) => p.startingTotals?.goals).map((p) => p.id)])]
+      .filter((id) => (fromResults.get(id) ?? 0) !== (snap.players.find((p) => p.id === id)?.startingTotals?.goals ?? 0))
+      .map((id) => `${nameOf(id)}: ${fromResults.get(id) ?? 0} in the preseason results vs ${snap.players.find((p) => p.id === id)?.startingTotals?.goals ?? 0} preseason goals on the profile`);
+    notes.push(
+      odd.length
+        ? `${preseasonGames.length} preseason result(s) shown on the Results page. Their scorers do not match the preseason goals on these profiles (check which is right): ${odd.join('; ')}.`
+        : `${preseasonGames.length} preseason result(s) shown on the Results page; their scorers match every player's preseason goals.`,
+    );
+  }
 
   const table = [...stats.values()]
     .map((s) => ({ player: nameOf(s.playerId), id: s.playerId, apps: s.appearances, goals: s.goals, assists: s.assists, w: s.wins, d: s.draws, l: s.losses, potm: s.potm }))

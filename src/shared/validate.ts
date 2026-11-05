@@ -55,9 +55,14 @@ export function validateMatchContent(m: MatchContent, ctx: ValidationContext = {
     err('TEAM_NAME_DUPLICATE', `Both teams are called "${tname('a')}". Give each team a different name.`);
   }
   const seen = new Map<string, TeamKey>();
+  const preseason = m.preseason === true;
   for (const k of TEAM_KEYS) {
     const roster = m.teams[k].playerIds;
-    if (roster.length === 0) err('TEAM_EMPTY', `${tname(k)} has no players.`);
+    if (preseason) {
+      if (roster.length > 0) {
+        err('PRESEASON_HAS_LINEUP', `${tname(k)}: a preseason result has no line-ups. Remove the players, or record it as a normal match (and clear the preseason totals it duplicates).`);
+      }
+    } else if (roster.length === 0) err('TEAM_EMPTY', `${tname(k)} has no players.`);
     for (const pid of roster) {
       const prev = seen.get(pid);
       if (prev === k) err('PLAYER_DUPLICATE_IN_TEAM', `${name(pid)} is listed twice in ${tname(k)}.`);
@@ -68,7 +73,7 @@ export function validateMatchContent(m: MatchContent, ctx: ValidationContext = {
       }
     }
   }
-  if (m.teams.a.playerIds.length !== m.teams.b.playerIds.length) {
+  if (!preseason && m.teams.a.playerIds.length !== m.teams.b.playerIds.length) {
     warn(
       'TEAM_SIZE_UNEQUAL',
       `Teams are different sizes (${tname('a')}: ${m.teams.a.playerIds.length}, ${tname('b')}: ${m.teams.b.playerIds.length}). Confirm no one is missing.`,
@@ -78,6 +83,14 @@ export function validateMatchContent(m: MatchContent, ctx: ValidationContext = {
   /* --- events ------------------------------------------------------------ */
   m.events.forEach((e, i) => {
     const at = `Event ${i + 1}`;
+    if (preseason) {
+      // No rosters to check against: the team is stated on the event. Just make sure the people exist.
+      const named = [e.playerId, e.type === 'goal' ? e.assistId : null].filter((x): x is string => typeof x === 'string');
+      for (const pid of named) {
+        if (ctx.knownPlayerIds && !ctx.knownPlayerIds.has(pid)) err('PLAYER_UNKNOWN', `${at}: player id "${pid}" does not exist.`);
+      }
+      return;
+    }
     if (e.type === 'goal') {
       if (e.playerId !== null && !m.teams[e.team].playerIds.includes(e.playerId)) {
         err('SCORER_NOT_IN_TEAM', `${at}: ${name(e.playerId)} is recorded scoring for ${tname(e.team)} but is not on that team.`);
@@ -134,7 +147,9 @@ export function validateMatchContent(m: MatchContent, ctx: ValidationContext = {
   }
 
   /* --- player of the match ------------------------------------------------ */
-  if (m.playerOfTheMatch !== null && !seen.has(m.playerOfTheMatch)) {
+  if (preseason && m.playerOfTheMatch !== null) {
+    err('PRESEASON_NO_POTM', 'A preseason result has no line-ups, so it cannot have a player of the match.');
+  } else if (m.playerOfTheMatch !== null && !seen.has(m.playerOfTheMatch)) {
     err('POTM_NOT_PARTICIPANT', `Player of the match ${name(m.playerOfTheMatch)} did not play in this match.`);
   }
 

@@ -34,8 +34,9 @@ function TopList({ idx, board, period }: { idx: Index; board: 'goals' | 'assists
 
 export function HomeView({ idx, today = localToday() }: { idx: Index; today?: string }) {
   const latest = idx.matchesDesc[0];
-  const [scope, setScope] = useState<'season' | 'all'>('season');
   const season: Period = latest ? { kind: 'season', id: seasonIdOf(latest.date, idx.startMonth) } : { kind: 'all' };
+  // Preseason results count towards no statistic, so a season with only those has nothing to rank: start on All.
+  const [scope, setScope] = useState<'season' | 'all'>(() => (idx.matchCount(season) > 0 ? 'season' : 'all'));
   const period: Period = scope === 'season' ? season : { kind: 'all' };
   const fixture = idx.nextFixture(today);
   const report = latest ? idx.reportFor(latest.id) : undefined;
@@ -163,7 +164,7 @@ export function HomeView({ idx, today = localToday() }: { idx: Index; today?: st
         </aside>
       </div>
 
-      <section>
+      {formRows.length > 0 && <section>
         <SectionHead title="Recent player form" href="/players" linkLabel="All players" />
         <div className="card">
           <ul className="plist">
@@ -179,7 +180,7 @@ export function HomeView({ idx, today = localToday() }: { idx: Index; today?: st
             ))}
           </ul>
         </div>
-      </section>
+      </section>}
 
       {news.length > 0 && (
         <section>

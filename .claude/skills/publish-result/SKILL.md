@@ -15,6 +15,8 @@ Read `CLAUDE.md` first (rules + spec format). Then:
    teams (names, colours, players), final score, scorers, assists, own goals, player of the match, optional
    minutes/venue/kick-off. Put the owner's message in `"instruction"`.
    Anything not stated stays absent — do not fill gaps.
+   **No line-ups given?** If the owner reports an older game's score and scorers but not who played (preseason), use `CLAUDE.md` rule 12:
+   `"preseason": true`, team names only, an explicit `"team"` on every goal — never invent line-ups. Ask for any missing date.
 3. **Dry run.** `npm run mnf -- match publish --stdin <<'JSON' … JSON` (no `--apply`).
 4. **Read the whole report.**
    - `NEEDS YOUR INPUT` (ambiguous/unknown names) → ask the owner, quoting the question. Wait. Pass the answer back

@@ -93,14 +93,17 @@ export function compareMatches(a: Pick<Match, 'date' | 'id'>, b: Pick<Match, 'da
   return a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-/** Published matches inside the period, oldest first. Unpublished matches never count. */
+/**
+ * Published matches inside the period, oldest first. Unpublished matches never count, and neither do
+ * preseason results (no line-ups: those games are carried by players' `startingTotals`).
+ */
 export function matchesForPeriod(
   matches: readonly Match[],
   period: Period = { kind: 'all' },
   seasonStartMonth = 1,
 ): Match[] {
   return matches
-    .filter((m) => m.status === 'published' && inPeriod(m.date, period, seasonStartMonth))
+    .filter((m) => m.status === 'published' && !m.preseason && inPeriod(m.date, period, seasonStartMonth))
     .sort(compareMatches);
 }
 

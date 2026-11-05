@@ -45,7 +45,7 @@ export function Scoreboard({ match: m, idx, hero = false, showLink = false }: { 
       </div>
       <div className="board__body">
         <div className="board__meta">
-          <span className="tag tag--accent">Full time</span>
+          <span className="tag tag--accent">{m.preseason ? 'Preseason' : 'Full time'}</span>
           <span>
             {weekdayName(m.date)} {formatLongDate(m.date)}
           </span>
@@ -62,9 +62,11 @@ export function Scoreboard({ match: m, idx, hero = false, showLink = false }: { 
         <div className="board__main">
           <div className="team team--a" style={{ '--c': cA } as React.CSSProperties}>
             <span className="team__name">{m.teams.a.name}</span>
-            <span className="team__sub">
-              <i className="swatch" /> {m.teams.a.playerIds.length} players
-            </span>
+            {!m.preseason && (
+              <span className="team__sub">
+                <i className="swatch" /> {m.teams.a.playerIds.length} players
+              </span>
+            )}
           </div>
           <div className="score" aria-hidden>
             <span className={`score__n pop ${win === 'a' ? 'win' : win === 'draw' ? '' : 'lose'}`}>{m.score.a}</span>
@@ -75,9 +77,11 @@ export function Scoreboard({ match: m, idx, hero = false, showLink = false }: { 
           </div>
           <div className="team team--b" style={{ '--c': cB } as React.CSSProperties}>
             <span className="team__name">{m.teams.b.name}</span>
-            <span className="team__sub">
-              <i className="swatch" /> {m.teams.b.playerIds.length} players
-            </span>
+            {!m.preseason && (
+              <span className="team__sub">
+                <i className="swatch" /> {m.teams.b.playerIds.length} players
+              </span>
+            )}
           </div>
         </div>
 

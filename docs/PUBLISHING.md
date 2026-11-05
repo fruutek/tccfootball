@@ -67,6 +67,10 @@ See `CLAUDE.md` → "Turning English into a spec" for the full mapping, and [`do
 
 Optional match fields: `kickoff`, `venue`, `sequence` (second game that day), `playerOfTheMatch`, `report`, `instruction`.
 
+**Preseason result** (score + scorers, no line-ups, counts towards no statistic):
+`{"date":"2026-10-12","preseason":true,"teams":{"a":{"name":"Team 1"},"b":{"name":"Team 2"}},"score":{"a":4,"b":1},"events":[{"type":"goal","player":"Katie","team":"a"},{"type":"goal","player":null,"team":"a"},{"type":"goal","player":"Andrew","team":"b"}]}`
+— every goal needs its `team`; no `players`, `playerOfTheMatch` or `report`.
+
 ## What triggers a deploy
 
 | Change | Needs a deploy? |

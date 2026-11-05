@@ -2,7 +2,10 @@ import { TEAM_KEYS, type TeamKey } from './constants';
 import type { Match, MatchEvent } from './schema';
 
 /** The parts of a match that describe what happened on the pitch. */
-export type MatchContent = Pick<Match, 'date' | 'teams' | 'score' | 'events' | 'playerOfTheMatch'>;
+export type MatchContent = Pick<Match, 'date' | 'teams' | 'score' | 'events' | 'playerOfTheMatch'> & {
+  /** A results-only preseason game: no line-ups, counts towards no statistic. */
+  preseason?: true | undefined;
+};
 
 export interface TeamAccounting {
   team: TeamKey;

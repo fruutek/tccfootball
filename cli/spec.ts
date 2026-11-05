@@ -35,7 +35,8 @@ const teamSpec = z
   .object({
     name: z.string().trim().min(1).max(30),
     colour: colour.optional(),
-    players: z.array(z.string().trim().min(1)).min(1).max(20),
+    /** Required (≥ 1) for a normal match; omit for a preseason result, which has no line-ups. */
+    players: z.array(z.string().trim().min(1)).max(20).default([]),
   })
   .strict();
 
@@ -84,6 +85,11 @@ export const matchSpecSchema = z
     score: z.object({ a: z.number().int().min(0).max(99), b: z.number().int().min(0).max(99) }).strict(),
     events: z.array(eventSpec).max(120).default([]),
     playerOfTheMatch: z.string().trim().min(1).nullable().optional(),
+    /**
+     * A results-only preseason game: score + scorers, no line-ups, counts towards no statistic.
+     * Every goal then needs an explicit "team" because there is no roster to infer it from.
+     */
+    preseason: z.literal(true).optional(),
     report: reportSpecSchema.optional(),
     /** Marks demo data so it can be purged before launch. */
     fictional: z.boolean().optional(),
@@ -206,7 +212,13 @@ export function resolveSpec(spec: MatchSpec, players: readonly Player[]): SpecRe
 
     // Which team does this event count for?
     let team: TeamKey | null = declared;
-    if (pid !== null) {
+    if (spec.preseason) {
+      // No line-ups to infer from: the owner must say which side each goal counts for.
+      if (declared === null) {
+        err('EVENT_TEAM_REQUIRED', `${at}: a preseason result has no line-ups, so every goal needs "team" ("a" or "b") to say which side it counts for.`);
+        return;
+      }
+    } else if (pid !== null) {
       const home = members(pid);
       if (home === null) {
         err('EVENT_PLAYER_NOT_IN_MATCH', `${at}: ${e.player} is named as a ${e.type.replace('_', ' ')} ${e.type === 'assist' ? 'provider' : 'scorer'} but is not in either line-up.`);
@@ -262,6 +274,7 @@ export function resolveSpec(spec: MatchSpec, players: readonly Player[]): SpecRe
         ? [...events].sort((x, y) => (('minute' in x ? x.minute : 0) ?? 0) - (('minute' in y ? y.minute : 0) ?? 0))
         : events,
       playerOfTheMatch: potm,
+      ...(spec.preseason ? { preseason: true as const } : {}),
     },
     resolved,
     clarifications,
@@ -271,7 +284,7 @@ export function resolveSpec(spec: MatchSpec, players: readonly Player[]): SpecRe
 
 /** Converts a stored match back to a name-based spec, so an edit starts from the current truth. */
 export function matchToSpec(
-  m: { id: string; date: string; kickoff?: string | undefined; venue?: string | undefined; teams: MatchContent['teams']; score: MatchContent['score']; events: MatchEvent[]; playerOfTheMatch: string | null },
+  m: { id: string; date: string; kickoff?: string | undefined; venue?: string | undefined; teams: MatchContent['teams']; score: MatchContent['score']; events: MatchEvent[]; playerOfTheMatch: string | null; preseason?: true | undefined },
   players: readonly Player[],
 ): MatchSpec {
   const name = (id: string) => players.find((p) => p.id === id)?.displayName ?? id;
@@ -287,7 +300,7 @@ export function matchToSpec(
       return {
         type: 'goal' as const,
         player: e.playerId === null ? null : ref(e.playerId),
-        ...(e.playerId === null ? { team: e.team } : {}),
+        ...(e.playerId === null || m.preseason ? { team: e.team } : {}),
         ...(e.assistId ? { assist: ref(e.assistId) } : {}),
         ...(e.minute !== undefined ? { minute: e.minute } : {}),
       };
@@ -314,6 +327,7 @@ export function matchToSpec(
     score: m.score,
     events,
     playerOfTheMatch: m.playerOfTheMatch === null ? null : ref(m.playerOfTheMatch),
+    ...(m.preseason ? { preseason: true as const } : {}),
   };
 }
 
